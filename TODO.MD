@@ -15,9 +15,9 @@
 |---|---|---|
 | M0 | Toolchain & skeleton | **✅ complete** |
 | M1 | Money foundation | **✅ complete** |
-| M2 | Auth | 🔨 services done, handlers pending |
+| M2 | Auth | **✅ complete** |
 | M3 | Wheel widget (Flutter) | ⬜ not started |
-| M4 | Spin engine + app shell | 🔨 engine done, API + UI pending |
+| M4 | Spin engine + app shell | 🔨 engine done, HTTP handlers + UI pending |
 | M5 | Real money, referrals, history | ⬜ not started |
 | M6 | M-Pesa deposits | 🚫 blocked on Daraja credentials |
 | M7 | M-Pesa withdrawals | 🚫 blocked on Daraja credentials |
@@ -110,9 +110,9 @@ clean under `go vet` and the race detector.
 
 ---
 
-## 🔨 M2 — Auth (services done, handlers pending)
+## ✅ M2 — Auth (COMPLETE)
 
-### Done
+### Services
 - [x] `auth.Normalise` — every Kenyan spelling → `254XXXXXXXXX`; **rejects** unparseable input rather than storing it corrupted (winzangu appended `"-need_update"` and stored it anyway, which caused duplicate-account creation on deposit)
 - [x] `auth.Mask` / `auth.Pretty`
 - [x] argon2id in PHC format (parameters travel with the hash), constant-time verify
@@ -125,15 +125,50 @@ clean under `go vet` and the race detector.
 - [x] Tests: full Kenyan format matrix, all rejection cases, idempotency, all-spellings-collapse-to-one-identity, mask, pretty
 - [x] `FuzzNormalise` — ~492k executions, no panic, no output the schema would reject
 
-### To do
-- [ ] `internal/users` — insert user + wallet + demo grant + referral binding in **one transaction** (duplicate phone `23505` → `409 phone_taken` with nothing half-created)
-- [ ] `POST /v1/auth/register` handler
-- [ ] `POST /v1/auth/login` handler (must not reveal whether the phone or the password was wrong)
-- [ ] `POST /v1/auth/refresh` handler (fresh `adm` flag from the DB, not replayed from the old token)
-- [ ] `POST /v1/auth/logout` handler
-- [ ] `GET /v1/me` — profile + balances + game config + referral summary in one call
-- [ ] Rate limits mounted: login 5/5min, register 3/hr
-- [ ] Integration tests: register→login→refresh→logout; 6 bad logins → `rate_limited` + `Retry-After`; rotated refresh presented twice → `token_reused`; suspend → next request rejected within 1 s; fresh signup has `demo_cents = 500000` and exactly one `demo_grant` row
+### Repository — `internal/users`
+- [x] `Create` — user + wallet + demo grant + referral binding in **ONE transaction**
+- [x] The demo grant goes through `wallet.Move`, so there is no back door for creating balance, not even at signup
+- [x] An unknown referral code is an **error**, not a silent ignore — a user who followed a friend's link should not quietly lose the attribution
+- [x] Referral-code collision retried (5 attempts) rather than failing the registration
+- [x] `TopUpDemo` — cooldown claimed by the UPDATE's `WHERE`, not a read-then-write, and it tops up **to** the target so repeated claims cannot stack
+
+### HTTP layer — `internal/api`
+> **Structural change from the original plan:** handlers live in `internal/api`
+> rather than `auth/handlers.go`. This keeps the service packages free of
+> `net/http` and lets `GET /me` aggregate across users + wallet + game without
+> those packages depending on one another.
+
+- [x] `POST /v1/auth/register` — 201 with tokens + user
+- [x] `POST /v1/auth/login` — one error for every failure mode, plus a dummy argon2 verify on unknown phones so latency is not an account-existence oracle
+- [x] `POST /v1/auth/refresh` — rotating, `adm` flag re-read from the DB
+- [x] `POST /v1/auth/logout` — idempotent (revoking a dead token is a success)
+- [x] `POST /v1/auth/logout-all` — kills live access tokens within a second
+- [x] `GET /v1/me` — profile + balances + game config + referral stats in one call
+- [x] `GET /v1/wallet`, `POST /v1/wallet/demo/topup`
+- [x] Rate limits mounted and **moved into config** (`RL_*`), so thresholds change without a rebuild
+
+### Verified — 20 integration tests
+- [x] register creates account + wallet + exactly one `demo_grant`; **no real money at signup**
+- [x] all 5 spellings of one number collapse to one identity; the rest get `409 phone_taken`
+- [x] bad input rejected: landline, wrong prefix, too short, letters, empty, weak password
+- [x] unknown JSON fields rejected (`DisallowUnknownFields`)
+- [x] referrer bound and counted; unknown code → `400 unknown_referral_code`
+- [x] **a failed registration leaves nothing behind** — the original account still logs in
+- [x] login does not reveal whether a phone exists (same status, code **and message**)
+- [x] login accepts every spelling of the registered number
+- [x] 6 bad logins → `rate_limited` with `retry_after_seconds`
+- [x] refresh rotates; the old token is dead; the new one works
+- [x] **20 concurrent refreshes of one token → exactly 1 succeeds, 19 `token_reused`**
+- [x] logout revokes and is idempotent; logout-all kills live access tokens
+- [x] protected routes reject missing / garbage / tampered / wrong-signature tokens
+- [x] **`alg=none` token rejected**
+- [x] `/me` returns all 12 segments and `rtp_bp=9000` from the server (client never hardcodes odds)
+- [x] `max_stake_cents = 0` with an empty bankroll
+- [x] demo top-up capped and cooldown-limited; **20 concurrent top-ups → exactly 1 succeeds, balance does not stack**
+
+### Bugs found and fixed during M2
+- [x] **`Rotate` had a read-then-delete race** — 15 of 20 concurrent refreshes all succeeded on the same token. Fixed with Redis `GETDEL` (`rds.ConsumeRefresh`), which is atomic. This was the same lost-update shape the wallet code guards against, and the test caught it.
+- [x] **Test isolation** — `go test ./...` runs packages in parallel against one database, so one package's `TRUNCATE` wiped another's fixtures mid-test (deadlocks, phantom "no wallet for user N"). Each test package now provisions its own Postgres database and its own Redis DB index, so `go test ./...` is correct however it is invoked rather than depending on `-p 1`.
 
 ---
 

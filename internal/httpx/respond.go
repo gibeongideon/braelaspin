@@ -74,7 +74,7 @@ var (
 	ErrNotFound = func() *APIError {
 		return Errorf(http.StatusNotFound, "not_found", "Not found.")
 	}
-	ErrConflict = func(code, msg string) *APIError { return Errorf(http.StatusConflict, code, msg) }
+	ErrConflict    = func(code, msg string) *APIError { return Errorf(http.StatusConflict, code, msg) }
 	ErrRateLimited = func() *APIError {
 		return Errorf(http.StatusTooManyRequests, "rate_limited", "Too many attempts. Please wait and try again.")
 	}

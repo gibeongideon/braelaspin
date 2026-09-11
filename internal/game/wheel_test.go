@@ -46,7 +46,7 @@ func TestValidateRejectsBadTables(t *testing.T) {
 	t.Cleanup(func() { Wheel = orig })
 
 	cases := []struct {
-		name  string
+		name   string
 		mutate func()
 	}{
 		{"zero weight makes a segment unreachable", func() { Wheel[3].Weight = 0 }},
@@ -83,7 +83,11 @@ func TestPayoutMatchesSchemaRounding(t *testing.T) {
 	// The spins_payout_exact CHECK computes stake * multiplier_bp / 10000 with
 	// Postgres integer division, which truncates. Go must truncate identically
 	// or every insert with a remainder will be rejected.
-	cases := []struct{ stake int64; mult int; want int64 }{
+	cases := []struct {
+		stake int64
+		mult  int
+		want  int64
+	}{
 		{500, 0, 0},
 		{500, 10000, 500},
 		{500, 20000, 1000},

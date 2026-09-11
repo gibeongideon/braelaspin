@@ -7,34 +7,75 @@ package testutil
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/url"
 	"os"
+	"path/filepath"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/dibon/braelaspin/internal/db"
 	"github.com/dibon/braelaspin/internal/wallet"
 )
 
+var (
+	setupOnce sync.Once
+	pkgURL    string
+	setupErr  error
+)
+
+// packageDBName derives a database name from the test binary, e.g.
+// ".../internal/api.test" -> "braelaspin_test_api".
+//
+// This matters because `go test ./...` runs each package's tests in a SEPARATE
+// PROCESS, IN PARALLEL. Sharing one database means one package's TRUNCATE wipes
+// another package's fixtures mid-test, producing deadlocks and phantom
+// "no wallet for user N" failures that look like production bugs but are not.
+// A database per package removes the shared mutable state entirely, and keeps
+// `go test ./...` correct however it is invoked rather than relying on -p 1.
+func packageDBName() string {
+	base := strings.TrimSuffix(filepath.Base(os.Args[0]), ".test")
+	var b strings.Builder
+	for _, r := range strings.ToLower(base) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' {
+			b.WriteRune(r)
+		}
+	}
+	name := b.String()
+	if name == "" {
+		name = "default"
+	}
+	return "braelaspin_test_" + name
+}
+
 // DB returns a migrated, empty database, or skips the test if none is
 // configured. Set TEST_DATABASE_URL (see `make test-integration`).
+//
+// Tests within a package must NOT call t.Parallel(): they share this database
+// and each one truncates it on entry.
 func DB(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 
-	url := os.Getenv("TEST_DATABASE_URL")
-	if url == "" {
+	base := os.Getenv("TEST_DATABASE_URL")
+	if base == "" {
 		t.Skip("TEST_DATABASE_URL not set; run `make test-integration`")
 	}
 
 	ctx := context.Background()
-	if err := db.MigrateUp(ctx, url); err != nil {
-		t.Fatalf("migrate test database: %v", err)
+	setupOnce.Do(func() { pkgURL, setupErr = provision(ctx, base, packageDBName()) })
+	if setupErr != nil {
+		t.Fatalf("provision test database: %v", setupErr)
 	}
 
-	pool, err := db.Open(ctx, url, 30, 2)
+	pool, err := db.Open(ctx, pkgURL, 30, 2)
 	if err != nil {
 		t.Fatalf("open test database: %v", err)
 	}
@@ -48,6 +89,45 @@ func DB(t *testing.T) *pgxpool.Pool {
 		pool.Close()
 	})
 	return pool
+}
+
+// provision creates this package's database if absent and migrates it,
+// returning its URL.
+func provision(ctx context.Context, baseURL, name string) (string, error) {
+	admin, err := pgx.Connect(ctx, baseURL)
+	if err != nil {
+		return "", fmt.Errorf("connect to %s: %w", baseURL, err)
+	}
+	// CREATE DATABASE cannot run inside a transaction and Postgres has no
+	// IF NOT EXISTS for it, so tolerate 42P04 (duplicate_database) from a
+	// concurrent package doing the same thing.
+	_, err = admin.Exec(ctx, `CREATE DATABASE "`+name+`"`)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if !errors.As(err, &pgErr) || pgErr.Code != "42P04" {
+			_ = admin.Close(ctx)
+			return "", fmt.Errorf("create database %s: %w", name, err)
+		}
+	}
+	_ = admin.Close(ctx)
+
+	url, err := withDBName(baseURL, name)
+	if err != nil {
+		return "", err
+	}
+	if err := db.MigrateUp(ctx, url); err != nil {
+		return "", fmt.Errorf("migrate %s: %w", name, err)
+	}
+	return url, nil
+}
+
+func withDBName(raw, name string) (string, error) {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", fmt.Errorf("parse TEST_DATABASE_URL: %w", err)
+	}
+	u.Path = "/" + name
+	return u.String(), nil
 }
 
 func truncate(t *testing.T, pool *pgxpool.Pool) {
@@ -65,6 +145,31 @@ func truncate(t *testing.T, pool *pgxpool.Pool) {
 		`UPDATE house SET bankroll_cents = 0, rake_cents = 0 WHERE id = 1`); err != nil {
 		t.Fatalf("reset house: %v", err)
 	}
+}
+
+// RedisURL returns a Redis URL on a database index reserved for this test
+// package, for the same reason DB() gives each package its own Postgres:
+// packages run in parallel, and a FlushDB in one would wipe another's tokens
+// and rate-limit counters mid-test.
+//
+// Redis ships with 16 databases; index 0 is left for development.
+func RedisURL(t *testing.T) string {
+	t.Helper()
+	base := os.Getenv("TEST_REDIS_URL")
+	if base == "" {
+		base = "redis://localhost:6380"
+	}
+	u, err := url.Parse(base)
+	if err != nil {
+		t.Fatalf("parse TEST_REDIS_URL: %v", err)
+	}
+
+	var h uint32 = 2166136261 // FNV-1a
+	for _, b := range []byte(packageDBName()) {
+		h = (h ^ uint32(b)) * 16777619
+	}
+	u.Path = "/" + fmt.Sprint(1+h%15) // 1..15
+	return u.String()
 }
 
 // AssertMoneyIsCorrect fails the test if any integrity invariant is violated.

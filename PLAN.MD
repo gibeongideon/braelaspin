@@ -296,7 +296,7 @@ Status legend: ✅ done & verified · 🔨 in progress · ⬜ not started · �
 |---|---|---|---|
 | **M0** | Toolchain & skeleton | ✅ | config fail-fast proven both ways; `/healthz` 200 while `/readyz` 503 with Redis down; graceful shutdown |
 | **M1** | Money foundation (schema, wallet, invariants) | ✅ | 10 integration tests incl. 200-goroutine and bankroll concurrency proofs; clean under `-race` |
-| **M2** | Auth | 🔨 | phone/password/token services done + fuzzed; **DB-backed handlers not yet wired** |
+| **M2** | Auth | ✅ | 20 integration tests: atomic registration, non-enumerable login, rotating refresh (20 concurrent → exactly 1), `alg=none` rejected, instant suspension |
 | **M3** | The wheel (Flutter `CustomPainter`, offline) | ⬜ | 200 consecutive spins land on the requested index; <8 ms/frame on the cheapest target device |
 | **M4** | Spin engine + app shell | 🔨 | engine + service done and statistically verified; **HTTP handlers and Flutter shell not started** |
 | **M5** | Real money, referrals, history | ⬜ | bankroll growth == turnover × 300/10000 to the cent |
@@ -329,6 +329,8 @@ braelaspin/
 │   ├── rds/                    refresh tokens · rate limits · idempotency · Daraja token · pubsub
 │   ├── httpx/                  router · middleware · error envelope
 │   ├── auth/                   phone · argon2id · JWT + refresh rotation
+│   ├── users/                  user record + the atomic registration txn
+│   ├── api/                    ★ ALL HTTP HANDLERS (services stay net/http-free)
 │   ├── wallet/                 ★ THE ONLY CODE THAT MOVES MONEY + invariants
 │   ├── game/                   wheel (table + crypto/rand) · spin transaction
 │   ├── testutil/               real-Postgres test harness
@@ -431,3 +433,27 @@ port the vendored `paypal/` directory.
 9. **Client never computes an outcome.** The server returns a segment index; the
    app animates to it.
 10. **Every integration test ends with the invariant assertion.**
+11. **Handlers go in `internal/api`.** Service packages must not import
+    `net/http`. Handlers map domain errors to stable API codes; services never
+    know about status codes.
+12. **Each test package gets its own database.** `testutil.DB` provisions one
+    from the test binary's name, because `go test ./...` runs packages in
+    parallel and a shared database means one package's `TRUNCATE` corrupts
+    another's fixtures. Do not add `t.Parallel()` to tests within a package —
+    they share that database and each truncates on entry.
+
+---
+
+## 13. Change log
+
+Deviations from the original plan, and why.
+
+| Change | Reason |
+|---|---|
+| Handlers moved from `auth/handlers.go` to a dedicated `internal/api` package | Keeps services free of `net/http`, and lets `GET /me` aggregate users + wallet + game without those packages depending on one another |
+| Rate limits moved from constants to config (`RL_*`) | Abuse thresholds should move per environment without a rebuild; also lets tests relax them without weakening production defaults |
+| `wallet.Move` gained `Hold`/`ReleaseHold`/`ReverseHold` | The withdrawal hold needed to be expressible without any caller touching `wallets` directly |
+| Redis gained `ConsumeRefresh` (GETDEL) | `Rotate` originally did Get-then-Del, which let 15 of 20 concurrent refreshes succeed on one token — the same lost-update shape the wallet code guards against |
+| `testutil` provisions a database per test package | `go test ./...` runs packages in parallel; a shared test database produced deadlocks and phantom failures |
+| Go 1.27.1 (plan said 1.23+), Flutter 3.47.3 / Dart 3.13.3 (plan said 3.35 / 3.9), Android SDK 36 | Current stable at install time; Flutter 3.47 requires SDK 36 |
+| Toolchain installed under `$HOME`, not `/usr/local` | `sudo` requires a password on this machine |

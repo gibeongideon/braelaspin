@@ -208,9 +208,9 @@ func (s *Service) IsAdmin(ctx context.Context, id int64) (bool, error) {
 
 // ReferralStats is the affiliate summary shown in the app.
 type ReferralStats struct {
-	Count        int   `json:"count"`
-	EarnedCents  int64 `json:"earned_cents"`
-	Last30Cents  int64 `json:"last_30_cents"`
+	Count       int   `json:"count"`
+	EarnedCents int64 `json:"earned_cents"`
+	Last30Cents int64 `json:"last_30_cents"`
 }
 
 func (s *Service) ReferralStats(ctx context.Context, userID int64) (ReferralStats, error) {

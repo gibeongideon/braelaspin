@@ -239,7 +239,7 @@ func (s *Service) Spin(ctx context.Context, req Request) (*Result, error) {
 			if _, err := wallet.Move(ctx, tx, wallet.MoveParams{
 				UserID: *referrerID, Kind: wallet.KindReferral, IsReal: true,
 				Delta: commission, RefID: &spinID,
-				Memo:  fmt.Sprintf("%d bp of a %d cent stake", s.econ.ReferralBP, req.StakeCents),
+				Memo: fmt.Sprintf("%d bp of a %d cent stake", s.econ.ReferralBP, req.StakeCents),
 			}); err != nil {
 				return nil, err
 			}
@@ -286,11 +286,11 @@ func (s *Service) FindByClientRef(ctx context.Context, userID int64, clientRef s
 
 // Config is GET /v1/game/config.
 type Config struct {
-	Segments       []Segment `json:"segments"`
-	RTPBP          int       `json:"rtp_bp"`
-	MinStakeCents  int64     `json:"min_stake_cents"`
-	MaxStakeCents  int64     `json:"max_stake_cents"`
-	MaxMultiplier  int       `json:"max_multiplier_bp"`
+	Segments      []Segment `json:"segments"`
+	RTPBP         int       `json:"rtp_bp"`
+	MinStakeCents int64     `json:"min_stake_cents"`
+	MaxStakeCents int64     `json:"max_stake_cents"`
+	MaxMultiplier int       `json:"max_multiplier_bp"`
 }
 
 // Config reports the wheel and the currently admissible stake range.

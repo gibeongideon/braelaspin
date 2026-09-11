@@ -81,9 +81,9 @@ type MoveParams struct {
 	IsReal bool
 	// Delta is signed: negative debits, positive credits. Zero is rejected —
 	// a ledger row that moves nothing is a bug, not a no-op.
-	Delta  int64
-	RefID  *int64
-	Memo   string
+	Delta int64
+	RefID *int64
+	Memo  string
 }
 
 // Move applies a signed delta to one wallet column and appends the matching

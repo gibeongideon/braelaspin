@@ -69,14 +69,14 @@ type Config struct {
 	RLDepositPer5Min  int
 
 	// m-pesa shared
-	MpesaEnv            string
-	MpesaBaseURL        string
-	CallbackSecret      string
-	CallbackCIDRs       []*net.IPNet
-	CallbackIPEnforce   bool
-	VerifyThreshCents   int64
-	MpesaDialShortcode  string
-	MpesaManualTill     string
+	MpesaEnv           string
+	MpesaBaseURL       string
+	CallbackSecret     string
+	CallbackCIDRs      []*net.IPNet
+	CallbackIPEnforce  bool
+	VerifyThreshCents  int64
+	MpesaDialShortcode string
+	MpesaManualTill    string
 
 	// m-pesa c2b (STK push)
 	C2BKey      string

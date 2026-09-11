@@ -39,8 +39,8 @@ func Open(ctx context.Context, url string, poolSize int) (*Client, error) {
 	return &Client{r: c}, nil
 }
 
-func (c *Client) Close() error                { return c.r.Close() }
-func (c *Client) Raw() *redis.Client          { return c.r }
+func (c *Client) Close() error                   { return c.r.Close() }
+func (c *Client) Raw() *redis.Client             { return c.r }
 func (c *Client) Ping(ctx context.Context) error { return c.r.Ping(ctx).Err() }
 
 // ── refresh tokens ───────────────────────────────────────────────────────────

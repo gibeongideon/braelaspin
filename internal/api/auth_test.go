@@ -9,7 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
+
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -40,12 +40,8 @@ func newEnv(t *testing.T) *env {
 	t.Helper()
 	pool := testutil.DB(t)
 
-	redisURL := os.Getenv("TEST_REDIS_URL")
-	if redisURL == "" {
-		redisURL = "redis://localhost:6380/9" // db 9, kept away from dev data
-	}
 	ctx := context.Background()
-	redis, err := rds.Open(ctx, redisURL, 10)
+	redis, err := rds.Open(ctx, testutil.RedisURL(t), 10)
 	if err != nil {
 		t.Skipf("TEST_REDIS_URL unavailable (%v); run `make up`", err)
 	}
