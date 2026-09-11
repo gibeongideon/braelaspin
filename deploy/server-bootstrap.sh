@@ -249,35 +249,31 @@ ok "braelaspin.service installed (MemoryMax=384M, CPUWeight=50)"
 # ── 7. caddy ────────────────────────────────────────────────────────────────
 log "Configuring Caddy"
 sudo tee /etc/caddy/Caddyfile >/dev/null <<'CADDYEOF'
-# Web app and API on ONE origin. Same-origin means production has no CORS
-# surface at all — the browser never makes a cross-origin request.
-#
-# To add TLS: replace `:80` with your domain (e.g. braela.example.com) and
-# Caddy obtains and renews a certificate automatically. Until then this is
-# PLAIN HTTP and passwords cross the wire in the clear.
-:80 {
+# ── shared site definition ───────────────────────────────────────────────────
+# Defined once and imported by both the domain and the bare-IP site, so the two
+# can never drift apart.
+(braelaspin) {
 	encode gzip zstd
 
-	# API, health and webhooks -> the Go service on loopback
+	# API, health and webhooks -> the Go service on loopback.
+	# Same origin as the web app, so production has no CORS surface at all.
 	@api path /v1/* /healthz /readyz /webhooks/*
 	handle @api {
 		reverse_proxy 127.0.0.1:8080
 	}
 
-	# Everything else -> the static web app
+	# Everything else -> the static web app.
 	handle {
 		root * /opt/braelaspin/web
 		try_files {path} /index.html
 		file_server
 
-		# Hashed asset names are immutable and cached for a year.
 		header /assets/* Cache-Control "public, max-age=31536000, immutable"
-		# Everything else is the HTML shell. It MUST NOT be cached, or a
-		# browser keeps running the previous build after a deploy. Matched by
-		# negation because try_files rewrites internally, so a request for "/"
-		# never matches a literal "/index.html" matcher.
+		# Negated matcher, because try_files rewrites internally and a request
+		# for "/" never matches a literal "/index.html".
 		@html not path /assets/*
 		header @html Cache-Control "no-cache, must-revalidate"
+
 		header {
 			X-Content-Type-Options nosniff
 			X-Frame-Options DENY
@@ -292,6 +288,23 @@ sudo tee /etc/caddy/Caddyfile >/dev/null <<'CADDYEOF'
 			roll_keep 5
 		}
 	}
+}
+
+# ── canonical: the domain, with automatic TLS ────────────────────────────────
+# Caddy obtains and renews a Let's Encrypt certificate on its own. Until the
+# DNS A record exists it will retry in the background; the bare-IP site below
+# keeps working throughout.
+braelaspin.dafeapp.com {
+	import braelaspin
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+}
+
+# ── kept working: the bare IP, plain HTTP ────────────────────────────────────
+# A public CA will not issue a certificate for a bare IP, so this is HTTP only.
+# It stays as a fallback and for testing. Caddy routes by Host, so a request
+# arriving for the domain matches the block above; anything else lands here.
+:80 {
+	import braelaspin
 }
 CADDYEOF
 sudo mkdir -p /var/log/caddy && sudo chown caddy:caddy /var/log/caddy

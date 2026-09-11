@@ -11,6 +11,7 @@ import { Api, type TokenStore } from './core/api';
 import { Store } from './core/store';
 import { mountApp } from './ui/app';
 import { toast } from './ui/toast';
+import { mountOfflineBanner } from './ui/offline';
 
 /** Where the API lives. Baked at build time; see .env.example. */
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080';
@@ -72,6 +73,7 @@ const root = document.getElementById('app');
 if (!root) throw new Error('#app not found');
 
 mountApp(root, store);
+mountOfflineBanner();
 
 store.boot().catch(() => {
   store.auth.value = 'signed-out';

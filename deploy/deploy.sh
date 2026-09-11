@@ -124,15 +124,20 @@ ok "services restarted"
 
 # ── verify from outside ─────────────────────────────────────────────────────
 log "Verifying from the public internet"
-BASE="http://${HOST#*@}"
-code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$BASE/healthz" || echo 000)
-[ "$code" = "200" ] || fail "GET $BASE/healthz returned $code"
-ok "$BASE/healthz  200"
+# Canonical domain first, then the bare IP, which stays supported.
+for BASE in "https://braelaspin.dafeapp.com" "http://${HOST#*@}"; do
+  for path in /healthz /; do
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$BASE$path" || echo 000)
+    [ "$code" = "200" ] || fail "GET $BASE$path returned $code"
+  done
+  ok "$BASE  healthz+app 200"
+done
 
-code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$BASE/" || echo 000)
-[ "$code" = "200" ] || fail "GET $BASE/ returned $code"
-ok "$BASE/  200  (web app)"
+# This host runs live trading: assert we did not disturb it.
+TERMS=$(ssh "$HOST" 'pgrep -fc terminal64.exe || echo 0')
+[ "$TERMS" -ge 1 ] || fail "MT5 terminals are not running after deploy"
+ok "MT5 intact ($TERMS terminals running)"
 
-printf '\n\033[0;32m  Deployed %s → %s\033[0m\n' "$VERSION" "$BASE"
+printf '\n\033[0;32m  Deployed %s → https://braelaspin.dafeapp.com\033[0m\n' "$VERSION"
 printf '  logs:     ssh %s "sudo journalctl -u braelaspin -f"\n' "$HOST"
 printf '  rollback: ssh %s "ls %s/releases"\n\n' "$HOST" "$APP_DIR"

@@ -13,15 +13,16 @@ import { AuthScreen } from './screens/auth';
 import { SpinScreen } from './screens/spin';
 import { WalletScreen } from './screens/wallet';
 import { HistoryScreen } from './screens/history';
+import { SpinsScreen } from './screens/spins';
 import { ReferScreen } from './screens/refer';
 
-export type Route = 'spin' | 'wallet' | 'history' | 'refer' | 'profile';
+export type Route = 'spin' | 'wallet' | 'spins' | 'history' | 'refer' | 'profile';
 
 const TABS: { route: Route; label: string; glyph: string; fab?: boolean }[] = [
   { route: 'wallet',  label: 'Wallet',  glyph: '👛' },
-  { route: 'history', label: 'History', glyph: '🕘' },
+  { route: 'spins',   label: 'Spins',   glyph: '🎡' },
   { route: 'spin',    label: 'Spin',    glyph: '⚡', fab: true },
-  { route: 'refer',   label: 'Invite',  glyph: '👥' },
+  { route: 'history', label: 'History', glyph: '🕘' },
   { route: 'profile', label: 'Profile', glyph: '👤' },
 ];
 
@@ -79,9 +80,10 @@ export function mountApp(root: HTMLElement, store: Store): void {
 
     const screen =
       current === 'wallet'  ? WalletScreen(store)
+    : current === 'spins'   ? SpinsScreen(store)
     : current === 'history' ? HistoryScreen(store)
     : current === 'refer'   ? ReferScreen(store)
-    : current === 'profile' ? ProfileScreen(store)
+    : current === 'profile' ? ProfileScreen(store, go)
     : SpinScreen(store, (r) => go(r as Route));
 
     scope = screen.scope;
@@ -113,7 +115,7 @@ export function mountApp(root: HTMLElement, store: Store): void {
 }
 
 /** Small enough to live here rather than in its own file. */
-function ProfileScreen(store: Store): { el: HTMLElement; scope: Scope } {
+function ProfileScreen(store: Store, go: (r: Route) => void): { el: HTMLElement; scope: Scope } {
   const scope = new Scope();
   const u = store.user.value;
 
@@ -129,12 +131,17 @@ function ProfileScreen(store: Store): { el: HTMLElement; scope: Scope } {
                      text: u?.phone_verified ? 'Verified' : 'Not verified' }),
         ),
       ),
-      h('div', { class: 'row' },
+      // Invite lost its tab slot to Spins, so it is reached from here.
+      h('button', {
+        class: 'row', style: 'width:100%;text-align:left;background:none',
+        onClick: () => go('refer'),
+      },
         h('div', { class: 'ico', text: '🎟' }),
         h('div', { class: 'body' },
-          h('div', { class: 'title', text: u?.ref_code ?? '—' }),
-          h('div', { class: 'meta', text: 'Your referral code' }),
+          h('div', { class: 'title', text: 'Invite friends' }),
+          h('div', { class: 'meta', text: `Your code: ${u?.ref_code ?? '—'} · earn 2%` }),
         ),
+        h('div', { class: 'muted', text: '›' }),
       ),
     ),
     h('div', { class: 'card' },

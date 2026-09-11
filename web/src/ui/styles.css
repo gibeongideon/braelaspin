@@ -589,3 +589,108 @@ button { cursor: pointer; border: 0; background: none; }
     background: rgba(0, 0, 0, 0.18);
   }
 }
+
+/* ── result overlay ─────────────────────────────────────────────────────────
+   Shows gross payout and net change together — see ui/result-overlay.ts for
+   why both are always present. */
+
+.result-overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(8, 5, 7, 0.72);
+  backdrop-filter: blur(3px);
+  z-index: 50;
+  animation: fade 0.2s var(--ease);
+}
+
+.result-card {
+  text-align: center;
+  padding: 28px 34px;
+  border-radius: 26px;
+  min-width: 260px;
+  background: linear-gradient(160deg, #241a20, #16120f);
+  border: 1px solid var(--border-2);
+  box-shadow: 0 22px 60px -18px rgba(0, 0, 0, 0.9);
+  animation: pop 0.3s var(--ease);
+}
+.result-card.win    { background: linear-gradient(160deg, #23301f, #16120f); border-color: rgba(63,163,77,.5); }
+.result-card.refund { background: linear-gradient(160deg, #2b2a1c, #16120f); border-color: rgba(245,197,24,.4); }
+.result-card.loss   { background: linear-gradient(160deg, #2a1e22, #16120f); border-color: var(--border-2); }
+
+.result-mult {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--amber-hi);
+}
+.result-card.loss .result-mult { color: var(--t3); }
+
+.result-amt {
+  font-size: 34px;
+  font-weight: 800;
+  margin: 6px 0 2px;
+  font-variant-numeric: tabular-nums;
+}
+.result-card.win .result-amt    { color: var(--green-hi); }
+.result-card.refund .result-amt { color: var(--gold); }
+.result-card.loss .result-amt   { color: var(--t2); }
+
+/* The arithmetic, spelled out so the player can check it. */
+.result-sum {
+  font-size: 12px;
+  color: var(--t3);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 10px;
+}
+
+.result-net {
+  font-size: 14px;
+  font-weight: 700;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+  color: var(--t2);
+}
+.result-net.pos { color: var(--green-hi); }
+.result-net.neg { color: var(--t3); }
+
+/* ── offline banner ─────────────────────────────────────────────────────── */
+
+.offline-banner {
+  position: fixed;
+  top: 0; left: 50%;
+  translate: -50% 0;
+  width: 100%;
+  max-width: var(--shell);
+  padding: 9px 16px;
+  background: #4a2b12;
+  border-bottom: 1px solid rgba(245, 197, 24, 0.4);
+  color: var(--gold);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  z-index: 70;
+  animation: drop 0.22s var(--ease);
+}
+
+/* ── retry block for failed lists ───────────────────────────────────────── */
+
+.retry { text-align: center; padding: 34px 20px; }
+.retry .big { font-size: 30px; opacity: 0.5; margin-bottom: 8px; }
+.retry p { color: var(--t3); font-size: 13px; margin: 0 0 14px; }
+.retry button { width: auto; padding: 10px 22px; }
+
+.skeleton {
+  height: 56px;
+  border-radius: var(--r);
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 50%, var(--surface) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.3s infinite;
+  margin-bottom: 8px;
+}
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}

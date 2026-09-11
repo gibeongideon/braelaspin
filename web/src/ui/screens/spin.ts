@@ -8,7 +8,9 @@
 import { h, mount, Scope } from '../dom';
 import { toast } from '../toast';
 import { WheelView, Ticker } from '../wheel-view';
-import { formatKes, formatMultiplier, parseShillings } from '../../core/money';
+import { formatKes, parseShillings } from '../../core/money';
+import { describeOutcome, PayoutMismatchError } from '../../core/outcome';
+import { showResult } from '../result-overlay';
 import { ApiError } from '../../core/errors';
 import type { Store } from '../../core/store';
 
@@ -157,10 +159,21 @@ export function SpinScreen(store: Store, nav: (route: string) => void): {
       // Balance commits only once the wheel has shown why.
       store.settleSpin(result);
 
-      if (result.payout_cents > 0) {
-        showWin(result.payout_cents, result.multiplier_bp);
-      } else {
-        toast('No win this time — spin again!', { kind: 'info' });
+      // Re-derive the payout from the stake and multiplier and compare with
+      // what the server sent. They must agree; if they ever do not, that is an
+      // arithmetic bug and the player must not be shown a number we cannot
+      // stand behind.
+      try {
+        const outcome = describeOutcome(
+          result.stake_cents, result.multiplier_bp, result.payout_cents);
+        showResult(outcome);
+      } catch (err) {
+        if (err instanceof PayoutMismatchError) {
+          console.error(err);
+          toast('We could not verify that result. Check your history.', { kind: 'error' });
+        } else {
+          throw err;
+        }
       }
       store.clearSpin();
     } catch (e) {
@@ -182,17 +195,7 @@ export function SpinScreen(store: Store, nav: (route: string) => void): {
     }
   });
 
-  function showWin(cents: number, multBp: number) {
-    const overlay = h('div', { class: 'win-overlay', onClick: () => overlay.remove() },
-      h('div', { class: 'win-card' },
-        h('div', { class: 'mult', text: `${formatMultiplier(multBp)} MULTIPLIER` }),
-        h('div', { class: 'amt', text: '+' + formatKes(cents) }),
-        h('div', { class: 'sub', text: 'Added to your balance' }),
-      ),
-    );
-    document.body.append(overlay);
-    setTimeout(() => overlay.remove(), 2600);
-  }
+
 
   const onResize = () => wheel.resize();
   window.addEventListener('resize', onResize);

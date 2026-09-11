@@ -130,6 +130,13 @@ func withDBName(raw, name string) (string, error) {
 	return u.String(), nil
 }
 
+// Reset empties every table and zeroes the house. Use it between sub-tests
+// that each need a clean ledger; DB() already does it once per test.
+func Reset(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	truncate(t, pool)
+}
+
 func truncate(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
 	ctx := context.Background()
