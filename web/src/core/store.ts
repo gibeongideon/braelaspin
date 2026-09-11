@@ -12,6 +12,7 @@
 
 import { Signal } from './signal';
 import { Api, newClientRef, type TokenStore } from './api';
+import { balanceAfterStake } from './outcome';
 import { ApiError } from './errors';
 import type {
   Balances, GameConfig, Me, ReferralStats, Session,
@@ -196,17 +197,44 @@ export class Store {
   }
 
   /**
-   * Called by the view when the wheel animation finishes.
-   * The balance is committed at the END of the spin so the number does not
-   * change before the wheel has shown why.
+   * Phase 1 of the balance update: the bet has been taken.
+   *
+   * Called as soon as the server accepts the spin, BEFORE the wheel animates,
+   * so the player sees their stake leave immediately — which is what actually
+   * happened, since the debit is already committed in the ledger by then.
+   *
+   * Uses the server's own two numbers (final balance minus payout) rather than
+   * subtracting the stake from a local value that could be stale.
+   */
+  applyStakeDebit(result: SpinResult): void {
+    this.#setBalance(
+      result.is_real,
+      balanceAfterStake(result.balance_cents, result.payout_cents),
+    );
+  }
+
+  /**
+   * Phase 2: the wheel has stopped, so the payout lands.
+   *
+   * On a win the balance rises by the payout. On a loss it is already at the
+   * post-bet figure and nothing moves — which is exactly what a player
+   * expects: the bet left, and nothing came back.
+   *
+   * Deliberately NOT applied before the animation: the number must not change
+   * before the wheel has shown why.
    */
   settleSpin(result: SpinResult): void {
+    this.#setBalance(result.is_real, result.balance_cents);
+    this.spin.value = { t: 'settled', result };
+  }
+
+  #setBalance(isReal: boolean, cents: Cents): void {
     const b = { ...this.balances.value };
-    if (result.is_real) b.real_cents = result.balance_cents;
-    else b.demo_cents = result.balance_cents;
+    if (isReal) b.real_cents = cents;
+    else b.demo_cents = cents;
+    // Funds held against an open withdrawal have already left real_cents.
     b.withdrawable_cents = b.real_cents;
     this.balances.force(b);
-    this.spin.value = { t: 'settled', result };
   }
 
   clearSpin(): void {

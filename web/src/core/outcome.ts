@@ -87,6 +87,19 @@ export class PayoutMismatchError extends Error {
   }
 }
 
+/**
+ * The balance immediately after the bet is taken but before the payout lands.
+ *
+ * Derived from the server's own two numbers rather than by subtracting the
+ * stake from a local value, which could be stale. For a losing spin the payout
+ * is 0, so this equals the final balance and settling changes nothing — which
+ * is exactly the behaviour a player expects: the bet leaves, and on a loss
+ * nothing comes back.
+ */
+export function balanceAfterStake(finalBalanceCents: Cents, payoutCents: Cents): Cents {
+  return finalBalanceCents - payoutCents;
+}
+
 /** "5x" as a whole number of times, for copy that reads naturally. */
 export function multiplierTimes(bp: BasisPoints): number {
   return bp / 10000;

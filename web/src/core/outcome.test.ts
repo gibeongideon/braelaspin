@@ -8,7 +8,7 @@
 
 import { describe, it, expect } from 'vitest';
 import {
-  describeOutcome, expectedPayout, isSafePayout,
+  describeOutcome, expectedPayout, isSafePayout, balanceAfterStake,
   multiplierTimes, PayoutMismatchError,
 } from './outcome';
 
@@ -100,5 +100,75 @@ describe('multiplierTimes', () => {
     expect(multiplierTimes(50_000)).toBe(5);
     expect(multiplierTimes(2_000_000)).toBe(200);
     expect(multiplierTimes(0)).toBe(0);
+  });
+});
+
+// ── the two-phase balance the player actually sees ─────────────────────────
+//
+// Requirement: clicking spin reduces the balance by the bet immediately; when
+// the wheel stops, a win adds the payout and a loss leaves it unchanged.
+//
+// Phase 1 is balanceAfterStake(finalBalance, payout) and phase 2 is
+// finalBalance, both taken from the server's own response rather than computed
+// from a local value that could be stale.
+describe('balance sequence: bet leaves, then payout lands', () => {
+  const START = 500_000; // KES 5,000
+  const STAKE = 1_000;   // KES 10
+
+  /** What the server returns, given a multiplier. */
+  function serverResult(multBp: number) {
+    const payout = expectedPayout(STAKE, multBp);
+    return { payout_cents: payout, balance_cents: START - STAKE + payout };
+  }
+
+  it('a LOSS: bet leaves, nothing comes back', () => {
+    const r = serverResult(0);
+    const afterBet = balanceAfterStake(r.balance_cents, r.payout_cents);
+
+    expect(afterBet).toBe(START - STAKE);        // 499,000 — the bet is gone
+    expect(r.balance_cents).toBe(START - STAKE); // settling changes nothing
+    expect(r.balance_cents - afterBet).toBe(0);
+  });
+
+  it('a WIN at 5x: bet leaves, then the payout lands', () => {
+    const r = serverResult(50_000);
+    const afterBet = balanceAfterStake(r.balance_cents, r.payout_cents);
+
+    expect(afterBet).toBe(499_000);              // -KES 10 on click
+    expect(r.balance_cents).toBe(504_000);       // +KES 50 when the wheel stops
+    expect(r.balance_cents - afterBet).toBe(5_000);
+    // Net over the whole spin is +KES 40.
+    expect(r.balance_cents - START).toBe(4_000);
+  });
+
+  it('a REFUND at 1x: bet leaves, the same amount comes back', () => {
+    const r = serverResult(10_000);
+    const afterBet = balanceAfterStake(r.balance_cents, r.payout_cents);
+
+    expect(afterBet).toBe(499_000);        // the bet really does leave
+    expect(r.balance_cents).toBe(START);   // and returns in full
+    expect(r.balance_cents - START).toBe(0);
+  });
+
+  it('a WIN at 200x', () => {
+    const r = serverResult(2_000_000);
+    const afterBet = balanceAfterStake(r.balance_cents, r.payout_cents);
+    expect(afterBet).toBe(499_000);
+    expect(r.balance_cents).toBe(499_000 + 200_000);
+  });
+
+  it('phase 1 always equals start − stake, whatever the multiplier', () => {
+    for (const bp of [0, 10_000, 20_000, 50_000, 100_000, 500_000, 2_000_000]) {
+      const r = serverResult(bp);
+      expect(balanceAfterStake(r.balance_cents, r.payout_cents)).toBe(START - STAKE);
+    }
+  });
+
+  it('phase 2 minus phase 1 is exactly the payout, every time', () => {
+    for (const bp of [0, 10_000, 20_000, 50_000, 100_000, 500_000, 2_000_000]) {
+      const r = serverResult(bp);
+      const afterBet = balanceAfterStake(r.balance_cents, r.payout_cents);
+      expect(r.balance_cents - afterBet).toBe(r.payout_cents);
+    }
   });
 });

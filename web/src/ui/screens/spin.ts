@@ -154,9 +154,13 @@ export function SpinScreen(store: Store, nav: (route: string) => void): {
     if (wheel.spinning) return;
     try {
       const result = await store.placeSpin();
+
+      // The bet is already committed server-side, so show it leaving now.
+      store.applyStakeDebit(result);
+
       await wheel.spinTo(result.segment_index);
 
-      // Balance commits only once the wheel has shown why.
+      // The payout lands only once the wheel has shown why.
       store.settleSpin(result);
 
       // Re-derive the payout from the stake and multiplier and compare with

@@ -16,7 +16,7 @@
 
 import {
   targetAngle, rotationAt, indicatedSegment, tickTimes,
-  segmentAngle, SPIN_DURATION_MS,
+  segmentAngle, segmentArcDeg, boundaryAngleDeg, SPIN_DURATION_MS,
 } from '../core/wheel';
 import type { Segment } from '../core/types';
 import { formatMultiplier } from '../core/money';
@@ -189,8 +189,12 @@ export class WheelView {
     ctx.fill();
 
     this.#segments.forEach((seg, i) => {
-      const start = (i * step - 90 - step / 2 + gap / 2) * DEG;
-      const end = ((i + 1) * step - 90 - step / 2 - gap / 2) * DEG;
+      // Geometry comes from core/wheel.ts, NOT from this file. When the
+      // renderer defined its own it drifted half a segment out and the
+      // pointer showed the wrong prize for every spin.
+      const arc = segmentArcDeg(i + 1, n);
+      const start = (arc.startDeg + gap / 2) * DEG;
+      const end = (arc.endDeg - gap / 2) * DEG;
       const { a, b, text } = tierColours(seg.multiplier_bp);
 
       // Tile: an annular sector with rounded ends, which reads as the
@@ -200,7 +204,7 @@ export class WheelView {
       ctx.arc(0, 0, tileInner, end, start, true);
       ctx.closePath();
 
-      const mid = (start + end) / 2;
+      const mid = arc.midDeg * DEG;
       const grad = ctx.createLinearGradient(
         Math.cos(mid) * tileInner, Math.sin(mid) * tileInner,
         Math.cos(mid) * tileOuter, Math.sin(mid) * tileOuter,
@@ -228,9 +232,9 @@ export class WheelView {
       ctx.restore();
     });
 
-    // Pins on the tile boundaries, as in the reference.
-    for (let i = 0; i < n; i++) {
-      const angle = (i * step - 90 - step / 2) * DEG;
+    // Pins on the tile boundaries, from the same shared formula.
+    for (let i = 1; i <= n; i++) {
+      const angle = boundaryAngleDeg(i, n) * DEG;
       const r = tileOuter + px * 0.008;
       ctx.beginPath();
       ctx.arc(Math.cos(angle) * r, Math.sin(angle) * r, px * 0.008, 0, TAU);

@@ -68,6 +68,57 @@ function mod360(d: number): number {
   return ((d % 360) + 360) % 360;
 }
 
+// ── where each segment is DRAWN ─────────────────────────────────────────────
+//
+// These live here, beside indicatedSegment, rather than in the renderer —
+// because when the drawing and the maths each defined their own geometry they
+// disagreed by half a segment, and the pointer showed segment k+1 for every
+// result the server sent. Self-consistent maths is not enough: the tiles have
+// to be placed by the same formula that decides what the pointer reads.
+//
+// The canonical mapping, derived once:
+//
+//   - the pointer is fixed at canvas -90deg (12 o'clock)
+//   - a face feature drawn at canvas angle `a` appears at `a + rotation`
+//   - so the feature under the pointer satisfies a + rotation = -90
+//   - indicatedSegment defines the pointer as reading wheel-local
+//     phi = mod360(-rotation), and segment k as occupying [(k-1)S, kS)
+//
+//   => wheel-local phi is drawn at canvas angle (phi - 90)
+//   => segment k spans canvas [(k-1)S - 90, kS - 90)
+//
+// Note what this means: at rotation 0 the pointer sits on the LEADING EDGE of
+// segment 1, not its centre. That is correct and invisible in play, because
+// targetAngle always lands mid-segment.
+
+export interface SegmentArc {
+  /** Canvas-space start angle in degrees. */
+  startDeg: number;
+  /** Canvas-space end angle in degrees. */
+  endDeg: number;
+  /** Canvas-space centre, where the label goes. */
+  midDeg: number;
+}
+
+/** Canvas-space arc for a 1-indexed segment. */
+export function segmentArcDeg(segment: number, segmentCount: number): SegmentArc {
+  if (segment < 1 || segment > segmentCount) {
+    throw new RangeError(`segment ${segment} out of range 1..${segmentCount}`);
+  }
+  const S = segmentAngle(segmentCount);
+  const startDeg = (segment - 1) * S - 90;
+  const endDeg = segment * S - 90;
+  return { startDeg, endDeg, midDeg: (startDeg + endDeg) / 2 };
+}
+
+/**
+ * Canvas-space angle of the boundary BEFORE a 1-indexed segment — where the
+ * pins sit. `boundaryAngleDeg(1)` is the pointer's resting line.
+ */
+export function boundaryAngleDeg(segment: number, segmentCount: number): number {
+  return (segment - 1) * segmentAngle(segmentCount) - 90;
+}
+
 /**
  * Quartic ease-out. Matches the reference implementation's GSAP Power3.easeOut
  * closely, and unlike a cubic-bezier approximation it is exact and cheap.

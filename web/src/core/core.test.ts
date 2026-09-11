@@ -9,7 +9,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   targetAngle, indicatedSegment, segmentAngle, easeOutQuart,
-  rotationAt, tickTimes, SPIN_REVOLUTIONS, SPIN_DURATION_MS,
+  rotationAt, tickTimes, segmentArcDeg, boundaryAngleDeg,
+  SPIN_REVOLUTIONS, SPIN_DURATION_MS,
 } from './wheel';
 import { formatKes, formatSigned, parseShillings, formatMultiplier, formatWhen } from './money';
 import { normalisePhone, prettyPhone, maskPhone } from './phone';
@@ -89,6 +90,83 @@ describe('wheel geometry', () => {
     }
     expect(ticks[0]).toBeGreaterThanOrEqual(0);
     expect(ticks[ticks.length - 1]).toBeLessThanOrEqual(SPIN_DURATION_MS);
+  });
+});
+
+// ── the pointer must sit on the segment the server chose ──────────────────
+//
+// REGRESSION: the renderer once defined its own tile geometry, centring
+// segment 1 on the pointer while indicatedSegment treated wheel-local 0 as
+// segment 1's leading edge. The two disagreed by half a segment, so the
+// pointer showed segment k+1 for EVERY result — a player winning 5x saw the
+// pointer on 10x. The maths was self-consistent and every test passed; nothing
+// checked the drawing against it.
+//
+// These tests model what the renderer draws, using the same exported geometry
+// the renderer now consumes, and assert it agrees with indicatedSegment.
+describe('pointer alignment: drawn tiles vs the indicated segment', () => {
+  const mod360 = (d: number) => ((d % 360) + 360) % 360;
+
+  /**
+   * Which tile the pointer physically overlaps, derived from the drawn arcs.
+   *
+   * The pointer is at canvas -90deg; a feature drawn at canvas `a` appears at
+   * `a + rotation`, so the one under the pointer has a = -90 - rotation.
+   */
+  function drawnSegmentUnderPointer(rotation: number, n: number): number {
+    const a = -90 - rotation;
+    for (let seg = 1; seg <= n; seg++) {
+      const { startDeg } = segmentArcDeg(seg, n);
+      if (mod360(a - startDeg) < segmentAngle(n)) return seg;
+    }
+    throw new Error('no tile under the pointer — the arcs do not tile the circle');
+  }
+
+  it('the drawn tile under the pointer IS the segment the server chose', () => {
+    for (let seg = 1; seg <= N; seg++) {
+      for (let trial = 0; trial < 50; trial++) {
+        const to = targetAngle(Math.random() * 5000, seg, N);
+        expect(drawnSegmentUnderPointer(to, N)).toBe(seg);
+      }
+    }
+  });
+
+  it('agrees with indicatedSegment at every rotation, not just landing points', () => {
+    for (let deg = 0; deg < 720; deg += 0.5) {
+      expect(drawnSegmentUnderPointer(deg, N)).toBe(indicatedSegment(deg, N));
+    }
+  });
+
+  it('the arcs tile the circle exactly, with no gap or overlap', () => {
+    const S = segmentAngle(N);
+    for (let seg = 1; seg <= N; seg++) {
+      const arc = segmentArcDeg(seg, N);
+      expect(arc.endDeg - arc.startDeg).toBeCloseTo(S, 10);
+      expect(arc.midDeg).toBeCloseTo((arc.startDeg + arc.endDeg) / 2, 10);
+      // Each arc begins exactly where the previous one ended.
+      if (seg > 1) {
+        expect(arc.startDeg).toBeCloseTo(segmentArcDeg(seg - 1, N).endDeg, 10);
+      }
+    }
+    const total = segmentArcDeg(N, N).endDeg - segmentArcDeg(1, N).startDeg;
+    expect(total).toBeCloseTo(360, 10);
+  });
+
+  it('segment 1 starts at the pointer, so rotation 0 reads segment 1', () => {
+    expect(segmentArcDeg(1, N).startDeg).toBe(-90); // canvas 12 o'clock
+    expect(indicatedSegment(0, N)).toBe(1);
+    expect(boundaryAngleDeg(1, N)).toBe(-90);
+  });
+
+  it('pins sit on the boundaries between tiles', () => {
+    for (let seg = 1; seg <= N; seg++) {
+      expect(boundaryAngleDeg(seg, N)).toBeCloseTo(segmentArcDeg(seg, N).startDeg, 10);
+    }
+  });
+
+  it('rejects an out-of-range segment', () => {
+    expect(() => segmentArcDeg(0, N)).toThrow(RangeError);
+    expect(() => segmentArcDeg(N + 1, N)).toThrow(RangeError);
   });
 });
 
