@@ -15,6 +15,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 )
 
 // Seg is one wheel segment.
@@ -119,6 +120,16 @@ func Validate(wantRTPBP int) error {
 			"fix the table or the config, do not ship a wheel whose odds disagree with its stated RTP",
 			gotRTP, wantRTPBP)
 	}
+	// The schema constrains segment_index to BETWEEN 1 AND 12. If the table ever
+	// grows or shrinks, every insert would fail the CHECK at run time — on a
+	// player's spin. Catch it at startup instead, where it is a deployment
+	// error rather than a failed bet.
+	if len(Wheel) != 12 {
+		return fmt.Errorf(
+			"game: wheel has %d segments but the spins.segment_index CHECK allows 1..12; "+
+				"add a migration widening the constraint before changing the table size",
+			len(Wheel))
+	}
 	return nil
 }
 
@@ -174,17 +185,74 @@ func Payout(stakeCents int64, multBP int) int64 {
 
 // MaxExposure is the largest payout this stake could produce. Admission
 // control compares it against the free bankroll.
+// MaxSafeStake is the largest stake for which stake x MaxMultBP cannot
+// overflow int64. Above it the arithmetic below is meaningless, so config
+// refuses to start (see ValidateStakeCeiling).
+func MaxSafeStake() int64 {
+	m := int64(MaxMultBP())
+	if m == 0 {
+		return math.MaxInt64
+	}
+	return math.MaxInt64 / m
+}
+
+// MaxExposure is the largest payout this stake could produce -- what the
+// bankroll must be able to cover before the draw.
+//
+// The overflow guard is not theoretical decoration. stake x 2,000,000 wraps
+// negative above ~4.6e12 cents, and a NEGATIVE exposure makes the admission
+// check `bankroll < exposure` false, so a stake the bankroll cannot possibly
+// pay would be admitted. Returning MaxInt64 instead fails closed: such a
+// stake is vetoed by every finite bankroll.
 func MaxExposure(stakeCents int64) int64 {
+	if stakeCents > MaxSafeStake() {
+		return math.MaxInt64
+	}
 	return Payout(stakeCents, MaxMultBP())
 }
 
 // MaxAffordableStake is the largest stake the given bankroll can safely accept.
+// MaxAffordableStake is the largest stake this bankroll can cover.
 func MaxAffordableStake(bankrollCents int64) int64 {
 	m := int64(MaxMultBP())
 	if m == 0 {
 		return 0
 	}
-	return bankrollCents * 10000 / m
+	if bankrollCents <= 0 {
+		return 0
+	}
+	// bankroll x 10000 overflows above ~9.2e14 cents and would return a
+	// NEGATIVE maximum stake. Above that threshold divide first: the answer
+	// loses at most one cent of precision, on a bankroll of KES 9 trillion.
+	var stake int64
+	if bankrollCents > math.MaxInt64/10000 {
+		stake = bankrollCents / m * 10000
+	} else {
+		stake = bankrollCents * 10000 / m
+	}
+	// Never advertise a stake the exposure calculation cannot represent. Without
+	// this clamp a vast bankroll would report a maximum that MaxExposure then
+	// vetoes, so GET /game/config would promise a bet the server refuses.
+	if limit := MaxSafeStake(); stake > limit {
+		return limit
+	}
+	return stake
+}
+
+// ValidateStakeCeiling refuses a configured maximum stake whose worst-case
+// payout could overflow. Called at startup beside Validate, so a misplaced
+// zero in MAX_STAKE_CENTS fails the process instead of corrupting a draw.
+func ValidateStakeCeiling(maxStakeCents int64) error {
+	if maxStakeCents <= 0 {
+		return fmt.Errorf("game: MAX_STAKE_CENTS must be positive, got %d", maxStakeCents)
+	}
+	if limit := MaxSafeStake(); maxStakeCents > limit {
+		return fmt.Errorf(
+			"game: MAX_STAKE_CENTS=%d exceeds the arithmetically safe ceiling of %d cents "+
+				"(a stake above this overflows stake x %d bp and would defeat admission control)",
+			maxStakeCents, limit, MaxMultBP())
+	}
+	return nil
 }
 
 // Segment describes one wheel segment for the client. Weights are included so

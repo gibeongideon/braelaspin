@@ -241,13 +241,33 @@ export class Store {
     this.spin.value = { t: 'idle' };
   }
 
-  /** Clamp a stake to what the server would currently accept. */
+  /**
+   * The largest stake the server would currently accept, or 0 when none is.
+   *
+   * `0` is a MEANINGFUL value for both inputs — an empty bankroll caps the
+   * real-money stake at zero, and an empty wallet affords nothing — so neither
+   * may be treated as "unset". An earlier version used `x || FALLBACK`, which
+   * silently disabled the clamp in exactly the two cases it exists for.
+   */
+  maxStake(): Cents {
+    const cfg = this.config.value;
+    const limits: Cents[] = [this.activeBalance];
+    // The bankroll cap applies to real play only; demo has no house exposure.
+    if (this.realMode.value) limits.push(cfg.max_stake_cents);
+    return Math.max(0, Math.min(...limits));
+  }
+
+  /**
+   * Clamp a stake into the acceptable range.
+   *
+   * Returns 0 when nothing is affordable, rather than snapping up to the
+   * minimum — proposing a bet the player cannot place is worse than showing
+   * zero and letting the Deposit prompt do its job.
+   */
   clampStake(cents: Cents): Cents {
     const cfg = this.config.value;
-    const ceiling = Math.min(
-      cfg.max_stake_cents || Number.MAX_SAFE_INTEGER,
-      this.activeBalance || Number.MAX_SAFE_INTEGER,
-    );
+    const ceiling = this.maxStake();
+    if (ceiling < cfg.min_stake_cents) return 0;
     return Math.max(cfg.min_stake_cents, Math.min(cents, ceiling));
   }
 }

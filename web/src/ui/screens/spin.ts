@@ -131,12 +131,14 @@ export function SpinScreen(store: Store, nav: (route: string) => void): {
       });
     }));
 
-    const max = cfg.max_stake_cents;
-    spinsHint.textContent = store.realMode.value && max > 0
-      ? `Max bet right now: ${formatKes(max)}`
-      : store.realMode.value
-        ? 'Real-money play is warming up — try practice mode.'
-        : 'Practice mode — no real money at stake.';
+    // One source of truth for the ceiling, shared with clampStake, so the
+    // number shown is the number the server would accept.
+    const max = store.maxStake();
+    spinsHint.textContent = !store.realMode.value
+      ? 'Practice mode — no real money at stake.'
+      : max >= cfg.min_stake_cents
+        ? `Max bet right now: ${formatKes(max)}`
+        : 'Real-money play is unavailable right now — try practice mode.';
   }
 
   stakeInput.addEventListener('input', () => {

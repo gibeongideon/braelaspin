@@ -172,3 +172,64 @@ describe('balance sequence: bet leaves, then payout lands', () => {
     }
   });
 });
+
+// ── JS doubles vs exact integer arithmetic ─────────────────────────────────
+//
+// expectedPayout does `Math.trunc((stake * bp) / 10000)` in double precision,
+// while Go and Postgres use exact int64 division. Doubles are exact for
+// integers below 2^53, and the product tops out near 10^13 — but "should be
+// fine" is not a proof, so this brute-forces the comparison against BigInt,
+// which is exact by construction.
+describe('floating point never disagrees with exact integer division', () => {
+  const exact = (stake: number, bp: number): number =>
+    Number((BigInt(stake) * BigInt(bp)) / 10000n); // BigInt division truncates
+
+  it('agrees with BigInt across the whole wheel and the full stake range', () => {
+    const bps = [0, 10_000, 20_000, 50_000, 100_000, 500_000, 2_000_000];
+    const stakes = [
+      1, 2, 3, 7, 13, 99, 100, 499, 500, 501, 999, 1_000, 1_001,
+      9_999, 10_000, 10_001, 33_333, 99_999, 123_456, 999_999,
+      1_000_000, 4_999_999, 5_000_000,
+    ];
+    for (const bp of bps) {
+      for (const stake of stakes) {
+        expect(expectedPayout(stake, bp)).toBe(exact(stake, bp));
+      }
+    }
+  });
+
+  it('agrees on 20,000 random stake/multiplier pairs', () => {
+    const bps = [0, 10_000, 20_000, 50_000, 100_000, 500_000, 2_000_000,
+                 5_000, 15_000, 12_345, 33_333, 1]; // fractional ones too
+    for (let i = 0; i < 20_000; i++) {
+      const stake = 1 + Math.floor(Math.random() * 5_000_000);
+      const bp = bps[Math.floor(Math.random() * bps.length)]!;
+      const got = expectedPayout(stake, bp);
+      const want = exact(stake, bp);
+      if (got !== want) {
+        throw new Error(`divergence at stake=${stake} bp=${bp}: double=${got} exact=${want}`);
+      }
+    }
+  });
+
+  it('agrees just below and just above every exact multiple of 10000', () => {
+    // The dangerous case would be a true quotient sitting a hair under an
+    // integer and rounding UP before trunc. The remainder is at most 9999/10000,
+    // nowhere near 1, so it cannot happen — verified rather than argued.
+    for (let q = 1; q <= 2_000; q++) {
+      for (const delta of [-1, 0, 1]) {
+        const product = q * 10_000 + delta;
+        if (product <= 0) continue;
+        expect(Math.trunc(product / 10_000)).toBe(Number(BigInt(product) / 10000n));
+      }
+    }
+  });
+
+  it('the product at the configured ceiling stays exactly representable', () => {
+    const product = 5_000_000 * 2_000_000;
+    expect(Number.isSafeInteger(product)).toBe(true);
+    expect(isSafePayout(5_000_000, 2_000_000)).toBe(true);
+    // And the payout itself is exact.
+    expect(expectedPayout(5_000_000, 2_000_000)).toBe(exact(5_000_000, 2_000_000));
+  });
+});

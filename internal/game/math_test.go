@@ -479,3 +479,143 @@ func nextPhone() string {
 	phoneSeq++
 	return fmt.Sprint(phoneSeq)
 }
+
+// ── 7. overflow guards ──────────────────────────────────────────────────────
+
+// AUDIT FINDING: MaxExposure used to compute `stake * 2_000_000 / 10000` with no
+// guard. Above ~4.6e12 cents that wraps NEGATIVE, and a negative exposure makes
+// the admission check `bankroll < exposure` false — so a stake no bankroll could
+// ever cover would be admitted and paid. Only reachable through a misplaced zero
+// in MAX_STAKE_CENTS, but the defence has to be arithmetic, not optimism.
+func TestMaxExposureFailsClosedInsteadOfOverflowing(t *testing.T) {
+	safe := game.MaxSafeStake()
+	t.Logf("safe stake ceiling: %d cents (KES %.0f billion)", safe, float64(safe)/100/1e9)
+
+	// Inside the safe range the answer is exact.
+	for _, stake := range []int64{500, 5_000_000, 1_000_000_000, safe} {
+		got := game.MaxExposure(stake)
+		if got < 0 {
+			t.Errorf("MaxExposure(%d) = %d, negative", stake, got)
+		}
+		if want := stake * 200; stake <= safe && got != want && got != math.MaxInt64 {
+			t.Errorf("MaxExposure(%d) = %d, want %d", stake, got, want)
+		}
+	}
+
+	// Beyond it, fail CLOSED: an exposure no finite bankroll can cover.
+	for _, stake := range []int64{safe + 1, 4_700_000_000_000, math.MaxInt64} {
+		got := game.MaxExposure(stake)
+		if got != math.MaxInt64 {
+			t.Errorf("MaxExposure(%d) = %d, want MaxInt64 so every bankroll vetoes it", stake, got)
+		}
+		// The property that actually matters: admission control rejects it.
+		if !(int64(1_000_000_000_000) < got) {
+			t.Errorf("a bankroll of 1e12 would ADMIT stake %d", stake)
+		}
+	}
+}
+
+func TestMaxAffordableStakeNeverGoesNegative(t *testing.T) {
+	for _, bankroll := range []int64{
+		0, -1, 500_000_000, 1_000_000_000_000,
+		900_000_000_000_000, 1_000_000_000_000_000, math.MaxInt64,
+	} {
+		got := game.MaxAffordableStake(bankroll)
+		if got < 0 {
+			t.Errorf("MaxAffordableStake(%d) = %d, negative", bankroll, got)
+		}
+		// And it must never claim more than the bankroll could actually pay.
+		if got > 0 && game.MaxExposure(got) > bankroll && bankroll > 0 {
+			t.Errorf("MaxAffordableStake(%d) = %d but its exposure %d exceeds the bankroll",
+				bankroll, got, game.MaxExposure(got))
+		}
+	}
+}
+
+func TestValidateStakeCeilingRefusesAnUnsafeConfig(t *testing.T) {
+	if err := game.ValidateStakeCeiling(5_000_000); err != nil {
+		t.Errorf("the shipped ceiling was rejected: %v", err)
+	}
+	for _, bad := range []int64{0, -1, game.MaxSafeStake() + 1, math.MaxInt64} {
+		if err := game.ValidateStakeCeiling(bad); err == nil {
+			t.Errorf("ValidateStakeCeiling(%d) accepted an unsafe ceiling", bad)
+		}
+	}
+}
+
+// ── 8. truncation across many spins ─────────────────────────────────────────
+
+// Rake and commission truncate PER SPIN, so the total is the sum of truncated
+// values, not the truncation of the total:
+//
+//	SUM floor(s_i * r / 10000)  !=  floor(SUM s_i * r / 10000)
+//
+// Every cent lost to truncation stays in the bankroll, so the books still
+// balance exactly — but the difference is real and anyone reconciling rake
+// against turnover needs to expect it. This test pins both facts.
+func TestOddStakesTruncatePerSpinAndStillBalance(t *testing.T) {
+	pool := testutil.DB(t)
+	ctx := context.Background()
+	testutil.Reset(t, pool)
+
+	const (
+		start      = int64(1_000_000_000)
+		rakeBP     = 500
+		referralBP = 200
+	)
+	testutil.FundHouse(t, pool, start)
+	referrer := testutil.NewUser(t, pool, nextPhone())
+	player := testutil.NewUser(t, pool, nextPhone(),
+		testutil.WithReal(10_000_000), testutil.ReferredBy(referrer))
+
+	svc := game.NewService(pool, game.Economics{
+		RTPBP: 9000, RakeBP: rakeBP, ReferralBP: referralBP,
+		MinStakeCents: 500, MaxStakeCents: 5_000_000,
+	})
+
+	// Deliberately awkward stakes: none of these divide 10000 evenly.
+	stakes := []int64{501, 733, 999, 1_111, 2_507, 3_333, 4_999, 7_777}
+
+	var turnover, payouts, wantRake, wantComm int64
+	for i, stake := range stakes {
+		res, err := svc.Spin(ctx, game.Request{
+			UserID: player, StakeCents: stake, IsReal: true,
+			ClientRef: fmt.Sprintf("odd-%d", i),
+		})
+		if err != nil {
+			t.Fatalf("spin %d (stake %d): %v", i, stake, err)
+		}
+		// The headline identity holds for awkward stakes too.
+		if want := stake * int64(res.MultiplierBP) / 10_000; res.PayoutCents != want {
+			t.Errorf("stake %d at %d bp: payout %d, want %d",
+				stake, res.MultiplierBP, res.PayoutCents, want)
+		}
+		turnover += stake
+		payouts += res.PayoutCents
+		wantRake += stake * rakeBP / 10_000     // truncated PER SPIN
+		wantComm += stake * referralBP / 10_000 // truncated PER SPIN
+	}
+
+	h := testutil.House(t, pool)
+	gotComm := testutil.Balances(t, pool, referrer).RealCents
+
+	if h.RakeCents != wantRake {
+		t.Errorf("rake = %d, want %d (sum of per-spin truncations)", h.RakeCents, wantRake)
+	}
+	if gotComm != wantComm {
+		t.Errorf("commission = %d, want %d", gotComm, wantComm)
+	}
+	if want := start + turnover - payouts - wantRake - wantComm; h.BankrollCents != want {
+		t.Errorf("bankroll = %d, want %d", h.BankrollCents, want)
+	}
+
+	// The truncation gap is real, and it stays in the bankroll — it is not
+	// money going missing.
+	bulkRake := turnover * rakeBP / 10_000
+	t.Logf("turnover %d: per-spin rake %d vs bulk %d (gap %d cents retained in the bankroll)",
+		turnover, wantRake, bulkRake, bulkRake-wantRake)
+	if wantRake > bulkRake {
+		t.Errorf("per-spin rake %d exceeds the bulk figure %d — truncation went the wrong way",
+			wantRake, bulkRake)
+	}
+}

@@ -110,6 +110,12 @@ func serve(ctx context.Context, cfg *config.Config, log *slog.Logger) error {
 	if err := game.Validate(cfg.RTPBP); err != nil {
 		return err
 	}
+	// A misplaced zero in MAX_STAKE_CENTS would overflow the exposure
+	// calculation and defeat admission control, so it is checked here rather
+	// than trusted.
+	if err := game.ValidateStakeCeiling(cfg.MaxStakeCents); err != nil {
+		return err
+	}
 	log.Info("wheel validated",
 		"segments", len(game.Wheel), "rtp_bp", game.RTPBP(), "max_multiplier_bp", game.MaxMultBP())
 

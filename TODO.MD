@@ -310,6 +310,36 @@ bet × multiplier"**. That identity is now proved at four independent layers.
       (`KES 10 bet × 5 = KES 50`), and **what the balance actually did**.
       1× is labelled "Your bet back — balance unchanged", not a win.
 
+### Pointer alignment — a real bug found and fixed
+- [x] **The pointer was off by exactly one segment on every single spin.** The
+      renderer defined its own tile geometry (`i*step - 90 - step/2`), centring
+      segment 1 on the pointer, while `indicatedSegment` treats wheel-local 0 as
+      segment 1's *leading edge*. The two disagreed by half a segment, so a
+      player winning 5× saw the pointer resting on 10×.
+- [x] Why the existing tests missed it: they only checked `core/wheel.ts`
+      against itself. The maths was perfectly self-consistent — **nothing
+      checked the drawing against the maths.**
+- [x] Fixed by moving tile geometry INTO `core/wheel.ts` as
+      `segmentArcDeg()` / `boundaryAngleDeg()`, derived from the same formula
+      that decides what the pointer reads. The renderer now consumes them and
+      computes no angles of its own, so the two cannot drift again.
+- [x] 6 regression tests, including one that models the drawn arcs and asserts
+      they agree with `indicatedSegment` at **every half-degree over two full
+      turns**, not only at landing points.
+
+### The balance the player sees — now two-phase
+- [x] Click spin → **the bet leaves the balance immediately** (`applyStakeDebit`),
+      because the debit is already committed in the ledger by the time the
+      server responds
+- [x] Wheel stops → `settleSpin` applies the payout: a **win adds it**, a
+      **loss leaves the balance unchanged** at the post-bet figure
+- [x] Phase 1 uses the server's own numbers (`balance_cents − payout_cents`)
+      rather than subtracting the stake from a possibly-stale local value
+- [x] 6 tests covering loss / refund / win / 200× — phase 1 always equals
+      `start − stake`, and phase 2 minus phase 1 is always exactly the payout
+- [x] Verified live: loss `499000→499000 (+0)`, 2× `498000→500000 (+2000)`,
+      1× refund `499000→500000 (+1000)`, 5× `+5000`
+
 ### Screens and polish
 - [x] Spin history screen (`/v1/game/spins`) with `bet × mult = payout` on every
       row, so a doubtful player can check us by eye
