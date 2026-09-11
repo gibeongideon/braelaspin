@@ -1,0 +1,325 @@
+# braelaspin — TODO
+
+> Task-level status. See **PLAN.MD** for *why* any of this is shaped the way it
+> is — especially §3 (the three money bugs) before touching wallet or game code.
+>
+> `[x]` done & verified · `[~]` partially done · `[ ]` not started · `[!]` blocked
+>
+> Last updated: 2026-09-11
+
+---
+
+## Progress at a glance
+
+| Phase | | Status |
+|---|---|---|
+| M0 | Toolchain & skeleton | **✅ complete** |
+| M1 | Money foundation | **✅ complete** |
+| M2 | Auth | 🔨 services done, handlers pending |
+| M3 | Wheel widget (Flutter) | ⬜ not started |
+| M4 | Spin engine + app shell | 🔨 engine done, API + UI pending |
+| M5 | Real money, referrals, history | ⬜ not started |
+| M6 | M-Pesa deposits | 🚫 blocked on Daraja credentials |
+| M7 | M-Pesa withdrawals | 🚫 blocked on Daraja credentials |
+| M8 | Admin surface | ⬜ not started |
+| M9 | WebSocket push | ⬜ not started |
+| M10 | Hardening & release APK | ⬜ not started |
+
+**Written so far:** ~4,000 lines of Go + SQL across 19 files. 22 tests passing,
+clean under `go vet` and the race detector.
+
+---
+
+## ✅ M0 — Toolchain & skeleton (COMPLETE)
+
+### Toolchain — all installed under `$HOME`, no sudo
+- [x] Go 1.27.1 → `~/.local/go`
+- [x] JDK 17 (Temurin) → `~/.local/jdk17`
+- [x] Android SDK **36** + build-tools 36.0.0 + platform-tools → `~/Android/Sdk`
+- [x] Flutter 3.47.3 stable (Dart 3.13.3) → `~/.local/flutter`
+- [x] `flutter doctor` green for Android (Linux-desktop toolchain missing — irrelevant, Android-only target)
+- [x] Reclaimed 7 GB from regenerable caches only (npm, playwright, pip, unused Docker images). `~/anaconda3` (in active use), `~/Downloads` and `~/snap` deliberately untouched.
+
+### Scaffolding
+- [x] `go.mod` — 7 direct deps: pgx, go-redis, chi, jwt, x/crypto, goose, (coder/websocket pending M9)
+- [x] `internal/config` — reports **every** bad key in one error; no secret has a default
+- [x] Production-mode assertions (sandbox URL, `MIGRATE_ON_BOOT`, `sslmode=disable`, IP enforcement, http BASE_URL)
+- [x] `internal/db` — pgx pool + `//go:embed` migrations via goose
+- [x] `AssertCurrent` — server refuses to start against a schema older than the binary
+- [x] `internal/rds` — 5 key patterns (refresh, ban, rate limit, idempotency, Daraja token) + pubsub helpers
+- [x] `internal/httpx` — router, error envelope, middleware (requestID, realIP, recover, log, auth, admin, ratelimit, timeout)
+- [x] `cmd/api` — `serve | migrate | healthcheck | version`
+- [x] `_ "time/tzdata"` embedded (mandatory: the STK password depends on `Africa/Nairobi`)
+- [x] slog with redaction hook (phones masked, secrets `[redacted]`, receipts kept)
+- [x] `deploy/docker-compose.yml` — Postgres 5433, Redis 6380 (non-default, avoids the host's own)
+- [x] Redis `--maxmemory-policy noeviction` (evicting a refresh token logs a user out; evicting an idempotency key can double-charge)
+- [x] `Makefile` (15 targets), `.env.example` (every setting documented), `.gitignore`
+
+### Verified
+- [x] Config fail-fast, missing keys → lists all 3 at once
+- [x] Config fail-fast, `APP_ENV=prod` → catches all 5 unsafe settings
+- [x] `make up` → both containers healthy
+- [x] `migrate up` applies, `migrate status` reports, re-run is idempotent
+- [x] Server boots; wheel validated at startup (`segments=12 rtp_bp=9000`)
+- [x] `/healthz` → 200 with **zero** dependencies
+- [x] `/readyz` → 200, and **503 with Redis stopped while `/healthz` stays 200**
+- [x] `X-Request-Id` generated and echoed
+- [x] Graceful shutdown on SIGTERM ("stopped cleanly")
+
+---
+
+## ✅ M1 — Money foundation (COMPLETE)
+
+### Schema — `internal/db/migrations/0001_init.sql` (248 lines)
+- [x] 9 tables: users, wallets, transactions, spins, deposits, withdrawals, house, mpesa_callbacks, admin_audit
+- [x] Money as `bigint` cents throughout — no floats anywhere
+- [x] `users.phone` CHECK `^254[17][0-9]{8}$`; `ref_code` 6–10 upper-alnum; `referred_by <> id`
+- [x] `wallets` — 3 balance columns (vs winzangu's 8), all `>= 0`
+- [x] `transactions` append-only via `DO INSTEAD NOTHING` rules on UPDATE **and** DELETE
+- [x] `tx_realm_kinds` CHECK — demo and real money cannot mix (invariant I3 as a constraint)
+- [x] `tx_referral_once` — a spin pays its referrer at most once
+- [x] `spins_payout_exact` CHECK — payout must equal `stake × mult / 10000`
+- [x] `spins_demo_no_rake` CHECK
+- [x] `dep_receipt_key` UNIQUE — the hard deposit-idempotency floor (winzangu used a racy `.count()`)
+- [x] `wd_one_open` partial UNIQUE — one open withdrawal per user, enforced by the **database**
+- [x] `house.bankroll_cents >= 0` — the Bug-2 backstop
+- [x] `cb_dedupe` on callback body hash
+
+### `internal/wallet` — the only code that moves money (329 + 196 lines)
+- [x] `Move` — signed delta only; **no parameter for an absolute balance** (this is the Bug-2 fix)
+- [x] `Lock` — always `ORDER BY user_id`, so two-wallet ops can't deadlock
+- [x] `HouseLock` / `MoveHouse` — relative deltas, CHECK backstop
+- [x] `Hold` / `ReleaseHold` / `ReverseHold` — the withdrawal hold (the Bug-3 fix)
+- [x] Typed errors: `ErrInsufficientFunds`, `ErrBankrollExhausted`
+- [x] Invariants I1, I2, I3, I4, I5, I5b, I6, I7, I8 as SQL
+- [x] `AssertInvariant` wired into every integration test's `t.Cleanup`
+- [x] `internal/testutil` — real-Postgres harness; **test funding goes through the ledger**, so there is no back door for creating money even in tests
+
+### Verified — 10/10 integration tests against real Postgres
+- [x] credit/debit updates balance and writes the ledger row
+- [x] overdraw → `ErrInsufficientFunds`, **whole transaction rolls back**, balance untouched
+- [x] zero-delta ledger row rejected
+- [x] **200 goroutines on a balance affording one debit → exactly 1 succeeded, 199 rejected, final balance 0** ← the lost-update regression test
+- [x] **100 goroutines against a 10-payout bankroll → exactly 10 succeeded, bankroll exactly 0, never negative** ← the skipped-debit regression test
+- [x] ledger append-only holds against direct `UPDATE` and `DELETE`
+- [x] hold → over-hold refused → reverse makes the player whole, `held_cents` cleared
+- [x] settled hold releases **without** crediting the player
+- [x] 100 two-wallet locks in **opposing** orders → no deadlock, money conserved
+- [x] demo and real balances move independently
+- [x] whole money path clean under `-race`
+
+---
+
+## 🔨 M2 — Auth (services done, handlers pending)
+
+### Done
+- [x] `auth.Normalise` — every Kenyan spelling → `254XXXXXXXXX`; **rejects** unparseable input rather than storing it corrupted (winzangu appended `"-need_update"` and stored it anyway, which caused duplicate-account creation on deposit)
+- [x] `auth.Mask` / `auth.Pretty`
+- [x] argon2id in PHC format (parameters travel with the hash), constant-time verify
+- [x] Password policy: 8–128 chars
+- [x] JWT access tokens (HS256, 15 min), thin claims (`sub` + `adm`)
+- [x] Opaque refresh tokens in Redis, **rotating**, reuse → kill the family
+- [x] Redis ban key checked on every request, so a suspension takes effect within a second despite a live 15-min token
+- [x] `VerifyAccess` **fails closed** if Redis is unreachable (authorisation, not abuse control)
+- [x] `NewRefCode` — 8 chars, Crockford base32 (no I/L/O/U), **random not derived** (winzangu embedded the owner's last 4 phone digits in a publicly-shared code)
+- [x] Tests: full Kenyan format matrix, all rejection cases, idempotency, all-spellings-collapse-to-one-identity, mask, pretty
+- [x] `FuzzNormalise` — ~492k executions, no panic, no output the schema would reject
+
+### To do
+- [ ] `internal/users` — insert user + wallet + demo grant + referral binding in **one transaction** (duplicate phone `23505` → `409 phone_taken` with nothing half-created)
+- [ ] `POST /v1/auth/register` handler
+- [ ] `POST /v1/auth/login` handler (must not reveal whether the phone or the password was wrong)
+- [ ] `POST /v1/auth/refresh` handler (fresh `adm` flag from the DB, not replayed from the old token)
+- [ ] `POST /v1/auth/logout` handler
+- [ ] `GET /v1/me` — profile + balances + game config + referral summary in one call
+- [ ] Rate limits mounted: login 5/5min, register 3/hr
+- [ ] Integration tests: register→login→refresh→logout; 6 bad logins → `rate_limited` + `Retry-After`; rotated refresh presented twice → `token_reused`; suspend → next request rejected within 1 s; fresh signup has `demo_cents = 500000` and exactly one `demo_grant` row
+
+---
+
+## 🔨 M4 — Spin engine + app shell (engine done, API + UI pending)
+
+### Done — `internal/game` (205 + 325 lines)
+- [x] 12-segment wheel table, weights summing to 10000
+- [x] `Validate` — fails the process if weights don't sum or RTP disagrees with config
+- [x] `Pick` — `crypto/rand`, cumulative walk, 1-indexed wire format, **fails closed** on entropy error
+- [x] `Payout` truncates identically to the Postgres CHECK
+- [x] `MaxAffordableStake` = bankroll / 200
+- [x] Spin transaction: lock wallets → lock house → **pre-draw bankroll veto** → draw → insert → move money
+- [x] Bankroll influences **admission only**, never the weights (the Bug-1 fix)
+- [x] Demo spins use the **identical** wheel and RNG, skip house/rake/referral
+- [x] Commission paid only on real play, only to a real referrer, never to a fallback user
+- [x] `FindByClientRef` — crash/timeout recovery path
+- [x] `Config` — segments + currently admissible stake range
+
+### Verified — 12/12 tests
+- [x] weights sum to exactly 10000
+- [x] **RTP is exactly 9000 bp**
+- [x] `Validate` rejects: RTP mismatch, zero weight, negative weight, bad sum, negative multiplier
+- [x] `MaxMultBP` = 2,000,000; KES 100k bankroll → KES 500 max stake
+- [x] `Payout` rounding matches Postgres integer division (8 cases incl. remainders)
+- [x] every cumulative boundary maps to the right segment
+- [x] 1-indexed wire format
+- [x] fails closed on entropy failure
+- [x] **χ² = 13.28 vs critical 34.53 (11 df) over 2,000,000 draws**
+- [x] **realised RTP 9024 bp vs 9000 configured over 2,000,000 simulated spins (within 4σ)**
+- [x] house edge covers rake + referral
+
+### To do
+- [ ] `GET /v1/game/config` handler (10 s cache)
+- [ ] `POST /v1/game/spin` handler + Redis idempotency claim/store/release
+- [ ] `GET /v1/game/spins` (keyset pagination), `GET /v1/game/spins/{id}`
+- [ ] Rate limit: spin 60/min per user
+- [ ] Integration tests: 200 concurrent spins on a one-spin balance → exactly one; replayed `client_ref` returns the **identical** response; stake above `bankroll/200` → `stake_exceeds_bankroll` writing **zero** rows; force the bankroll CHECK mid-spin → whole spin rolls back and the stake is *not* taken
+- [ ] Flutter: `flutter create --platforms=android`, strip `cupertino_icons`
+- [ ] Flutter: `api.dart` (HttpClient, **single-flight** 401 refresh, idempotency keys)
+- [ ] Flutter: `native.dart` MethodChannel (Keystore-encrypted refresh token, tick sound, share, dial, initial link)
+- [ ] Flutter: `store.dart`, `auth.dart`, `gate.dart`, `spin.dart`
+- [ ] **Test login on a physical Android 6 device** — settles whether Dart's engine-bundled TLS roots avoid the ISRG-Root-X1 breakage on older Tecno/Infinix/itel handsets
+
+---
+
+## ⬜ M3 — Wheel widget (Flutter, offline)
+
+- [ ] `wheel_spec.dart` — segment fills/labels; **multipliers come from the API**, never hardcoded
+- [ ] `wheel_face.dart` — record the static face once into a `ui.Picture`
+- [ ] `wheel_painter.dart` — per frame: rotate + `drawPicture` + pins (one transform, not 12 arcs + 12 text layouts)
+- [ ] `wheel_view.dart` — `AnimationController`, `spinTo(index)`, tick cursor
+- [ ] `spin_math.dart` — `targetAngleDeg`, `indicatedSegment`, `QuartOut` curve
+- [ ] Keep winzangu's feel: 15 s, ~7 revolutions, per-pin tick (precompute crossing times, don't poll per frame)
+- [ ] **Do NOT reset the angle to 0 before each spin** — `xdarius.js:199` does and it snaps visibly; solve the congruence from where the wheel rests
+- [ ] `CustomPainter(repaint: controller)` — zero widget rebuilds during a spin
+- [ ] Block tab switching and system-back while spinning (`PopScope`)
+- [ ] Debug harness: "spin to segment N"
+- [ ] Verify: 200 consecutive spins land on the requested index (`indicatedSegment(final) == seg`)
+- [ ] Verify: <8 ms/frame in `--profile` **on the cheapest target device**, not a flagship
+- [ ] Verify: ticks don't buzz past 4 SoundPool streams
+
+---
+
+## ⬜ M5 — Real money, referrals, history
+
+- [ ] `internal/referral` — code generation, binding at registration, commission, stats
+- [ ] `GET /v1/referrals` — phones **masked** (winzangu leaked referees' full numbers to anyone with the code)
+- [ ] `GET /v1/history` — keyset pagination over `transactions`
+- [ ] `POST /v1/wallet/demo/topup` with cooldown → `429 demo_topup_not_eligible`
+- [ ] Self-referral blocked
+- [ ] Flutter: `wallet.dart`, `history.dart`, `refer.dart`, share intent, `/r/<code>` App Link
+- [ ] Verify: after 10⁵ real spins, bankroll growth == `turnover × 300/10000` **to the cent**
+- [ ] Verify: referee's spin credits the referrer exactly 2%, one row
+- [ ] Verify: `referred_by IS NULL` pays nobody
+- [ ] Verify: cold install from a referral link attributes correctly
+
+---
+
+## 🚫 M6 — M-Pesa deposits (BLOCKED)
+
+**Blocked on:** Daraja sandbox credentials — C2B consumer key/secret, shortcode,
+passkey. `.env` holds placeholders so everything else runs.
+
+- [ ] `internal/mpesa/client.go` — token cache with `SetNX` stampede lock
+- [ ] **Timestamp in `Africa/Nairobi`** (winzangu uses naive server-local time → invalid STK password off EAT)
+- [ ] **Standard base64 for HTTP Basic**, not urlsafe (winzangu uses urlsafe; alphabets differ on `+`/`/`)
+- [ ] STK push + STK query
+- [ ] `parse.go` — every field optional (winzangu's date slicing panics on short strings and the bare `except` swallows it → silently dropped deposit)
+- [ ] Webhook security: constant-time path secret · Safaricom CIDR allowlist (log-only first week) · 64 KB body · 5 s deadline · per-IP rate limit
+- [ ] Archive every callback to `mpesa_callbacks` **before any logic runs**
+- [ ] **Look up by `checkout_request_id`, never by phone** — and never create a user from a webhook (winzangu auto-created accounts whose password was the phone number)
+- [ ] Credit `min(callback_amount, requested)` and flag `needs_review` on any difference
+- [ ] Deposits above `MPESA_VERIFY_THRESHOLD_CENTS` confirmed by query, not by callback
+- [ ] `POST /v1/wallet/deposits`, `GET /v1/wallet/deposits/{id}`, manual claim
+- [ ] Deposit reconciler (90 s threshold, `pg_try_advisory_lock`)
+- [ ] Flutter: `DepositScreen`, `StkWaitingView` (route, not dialog; 90 s ring; poll ladder 2 s→4 s), `DepositManualScreen`, `ACTION_DIAL` for `*334#`
+- [ ] Copy rule: **an unresolved STK is `pending`, never `failed`**
+- [ ] Verify: sandbox end-to-end over `make tunnel`
+- [ ] Verify: same callback replayed 50× concurrently credits **once**
+- [ ] Verify: 50 distinct receipts on one `checkout_request_id` → one credit, 49 `duplicate_receipt`
+- [ ] Verify: forged callback on a guessed path → 404; right path, bad IP → 403
+- [ ] Verify: kill the API before the callback, restart → reconciler credits within 60 s
+- [ ] Verify: **callback arriving at t=120 s, after the client gave up, still credits**
+- [ ] Verify: fuzz the parsers 60 s, zero panics
+
+---
+
+## 🚫 M7 — M-Pesa withdrawals (BLOCKED)
+
+**Blocked on:** Daraja B2C credentials — key/secret, shortcode, initiator
+name/password, sandbox `.cer`.
+
+- [ ] `SecurityCredential` = `base64(RSA-PKCS1v15(initiator_password, cert))`, computed **at startup** so cert rotation is a file swap + restart
+- [ ] `POST /v1/wallet/withdrawals` — hold at request time, `409` on a second open one
+- [ ] Admin approve/reject; `AUTO_APPROVE_CEILING_CENTS=0` means a human sees every one
+- [ ] Dispatcher: **`UPDATE ... SET status='sending'` COMMITS BEFORE the HTTP call.** Inverting this is how you pay a withdrawal twice.
+- [ ] B2C v3 where available (own `OriginatorConversationID` → request-level idempotency); carry the id in `Remarks` as a v1/v2 fallback
+- [ ] Result callback → settle (release hold, sweep fee to rake) **or** reverse (release + credit back) in one transaction
+- [ ] **Timeout callback: record and back off. Reverse NOTHING.** A timeout means unknown.
+- [ ] Exponential backoff `2^attempts` min, capped 30; the worker never declares failure — the reconciler does
+- [ ] Withdrawal reconciler via transaction-status query; `withdrawal_stuck` alert after 1 h
+- [ ] Flutter: `WithdrawScreen`, confirm sheet, pending receipt (never a blocking spinner), 3-state badge
+- [ ] Verify: sandbox happy path → `paid`, hold released, I5 holds
+- [ ] Verify: non-zero result reverses the hold **in the same transaction**, balance whole
+- [ ] Verify: timeout callback reverses nothing; reconciler resolves it
+- [ ] Verify: `SIGKILL` between the `sending` commit and the Daraja response, restart → reconciler **queries, never re-sends**
+- [ ] Verify: two concurrent requests → one `409`
+- [ ] Verify: a `failed` row without a reversal is refused by the schema
+
+---
+
+## ⬜ M8 — Admin surface
+
+- [ ] `internal/admin` + `//go:embed admin.html` (one ~250-line vanilla-JS page — no npm, no second deployable)
+- [ ] Withdrawal queue with user context (balance, lifetime deposits/withdrawals)
+- [ ] Deposits needing review
+- [ ] User lookup, suspend, adjust (**mandatory reason**; goes through `wallet.Move` so it appears in the player's own history)
+- [ ] `GET /v1/admin/stats` — bankroll, rake, today's turnover and realised RTP, open holds
+- [ ] `GET /v1/admin/integrity` — the I1–I8 lights
+- [ ] `admin_audit` row for **every** mutation
+- [ ] Verify: player JWT on any `/admin/*` → 403
+- [ ] Verify: an adjustment moves money through the ledger and I1 still holds
+
+> Contrast: winzangu's Django admin makes `tokens`, `trial_balance` and
+> `withraw_power` inline-editable with **no ledger row written**, and
+> `CentralBank.give_away` directly editable, which changes every player's odds.
+
+---
+
+## ⬜ M9 — WebSocket push
+
+- [ ] `internal/ws` (coder/websocket) + `internal/push` (Redis `PSUBSCRIBE`)
+- [ ] JWT in the **handshake header**, never a query string (which would land in nginx logs)
+- [ ] 6 frame types: `hello`, `balance`, `deposit`, `withdrawal`, `tx`, `config`
+- [ ] Emitters at the 4 existing commit points — **no money logic touched**
+- [ ] `pingInterval` 20 s; drop slow clients after a 5 s write deadline
+- [ ] Flutter `socket.dart`: jittered exponential backoff, lifecycle-aware, `GET /me` on resume
+- [ ] **Acceptance criterion: disable the socket entirely and the whole app still works**
+
+---
+
+## ⬜ M10 — Hardening & release
+
+- [ ] `MPESA_CALLBACK_IP_ENFORCE=true` after a week of log-only observation
+- [ ] `POST /v1/client-error`; in-app update check `GET /v1/app/version`
+- [ ] `deploy/Dockerfile` — distroless static, `CGO_ENABLED=0 -trimpath -s -w`
+- [ ] 5-minute integrity cron; bankroll snapshots
+- [ ] Flutter release: signing config, `key.properties` gitignored, R8 + `shrinkResources`, `minSdk 23`
+- [ ] `--split-per-abi --obfuscate --split-debug-info --tree-shake-icons`
+- [ ] CI size gate (fail the build on APK regression)
+- [ ] Verify: `hey -n 20000 -c 100` on `/game/spin` → p99 < 50 ms, zero errors, invariants hold after
+- [ ] Verify: `go vet` + `staticcheck` clean; `gitleaks` finds nothing
+- [ ] Verify: a captured log file contains **no** unmasked phone or secret
+- [ ] Verify: **arm64 APK < 10 MB**
+- [ ] Verify: `APP_ENV=prod` with a sandbox M-Pesa URL refuses to start
+- [ ] Verify: restore from `pg_dump` passes the invariant suite
+- [ ] Verify: signed release APK on a physical device completes **deposit → spin → withdraw**
+- [ ] **R8 breakage only shows in release builds** — every device test must be a release build
+
+---
+
+## Needed from the product owner
+
+- [!] **Daraja sandbox credentials** (blocks M6, M7) — C2B + B2C key/secret, shortcode, passkey, initiator name/password, sandbox `.cer`
+- [ ] Confirm the **referral rate** (currently 2% of turnover)
+- [ ] Confirm **spin duration** (15 s as winzangu, or ~9 s)
+- [ ] Confirm **distribution route** (Play + BCLB licence, or sideloaded APK) — decides whether the in-app updater is mandatory in v1
+- [ ] A **physical Android device** for M3 frame-timing and the M4 Android-6 TLS check
+- [ ] Decide on **responsible-gaming controls** (absent from winzangu entirely; a BCLB licence will require them)

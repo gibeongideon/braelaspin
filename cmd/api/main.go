@@ -31,12 +31,14 @@ import (
 	// server-local time and broke the same way off EAT.
 	_ "time/tzdata"
 
+	"github.com/dibon/braelaspin/internal/api"
 	"github.com/dibon/braelaspin/internal/auth"
 	"github.com/dibon/braelaspin/internal/config"
 	"github.com/dibon/braelaspin/internal/db"
 	"github.com/dibon/braelaspin/internal/game"
 	"github.com/dibon/braelaspin/internal/httpx"
 	"github.com/dibon/braelaspin/internal/rds"
+	"github.com/dibon/braelaspin/internal/users"
 )
 
 // version is stamped at build time: -ldflags "-X main.version=$(git rev-parse --short HEAD)"
@@ -136,10 +138,27 @@ func serve(ctx context.Context, cfg *config.Config, log *slog.Logger) error {
 	defer redis.Close()
 
 	tokens := auth.NewTokenService(cfg.JWTSecret, cfg.JWTIssuer, cfg.AccessTokenTTL, cfg.RefreshTTL, redis)
+	userSvc := users.NewService(pool, cfg.DemoGrantCents)
+	gameSvc := game.NewService(pool, game.Economics{
+		RTPBP:         cfg.RTPBP,
+		RakeBP:        cfg.RakeBP,
+		ReferralBP:    cfg.ReferralBP,
+		MinStakeCents: cfg.MinStakeCents,
+		MaxStakeCents: cfg.MaxStakeCents,
+	})
 
 	router := httpx.NewRouter(httpx.Deps{
 		Cfg: cfg, Log: log, DB: pool, Redis: redis, Tokens: tokens,
 	})
+
+	apiSrv, err := api.New(api.Deps{
+		Cfg: cfg, Log: log, DB: pool, Redis: redis,
+		Tokens: tokens, Users: userSvc, Game: gameSvc,
+	})
+	if err != nil {
+		return err
+	}
+	apiSrv.Routes(router)
 
 	srv := &http.Server{
 		Addr:    cfg.HTTPAddr,
