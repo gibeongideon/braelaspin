@@ -16,8 +16,11 @@
 | M0 | Toolchain & skeleton | **✅ complete** |
 | M1 | Money foundation | **✅ complete** |
 | M2 | Auth | **✅ complete** |
+| **W1** | **Web scaffold (TypeScript)** | **✅ complete** |
+| W2 | Web polish + deposit/withdraw screens | ⬜ blocked with M6/M7 |
+| W3 | Web production deploy | 🔨 image + nginx written, not deployed |
 | M3 | Wheel widget (Flutter) | ⬜ not started |
-| M4 | Spin engine + app shell | 🔨 engine done, HTTP handlers + UI pending |
+| M4 | Spin engine + app shell | 🔨 **HTTP handlers done**; Flutter UI pending |
 | M5 | Real money, referrals, history | ⬜ not started |
 | M6 | M-Pesa deposits | 🚫 blocked on Daraja credentials |
 | M7 | M-Pesa withdrawals | 🚫 blocked on Daraja credentials |

@@ -110,6 +110,16 @@ func (s *Server) Routes(r chi.Router) {
 			r.Get("/wallet", s.h(s.walletBalances))
 			r.Post("/auth/logout-all", s.h(s.logoutAll))
 			r.Post("/wallet/demo/topup", s.h(s.demoTopUp))
+
+			r.Get("/game/config", s.h(s.gameConfig))
+			r.Get("/game/spins", s.h(s.spins))
+			r.Get("/game/spins/by-ref/{ref}", s.h(s.spinByRef))
+			r.Get("/history", s.h(s.history))
+
+			// Spin carries its own tighter limit on top of the read limit.
+			r.With(httpx.RateLimit(s.redis, httpx.RateLimitSpec{
+				Action: "spin", Limit: s.cfg.RLSpinPerMin, Window: time.Minute, ByUser: true,
+			})).Post("/game/spin", s.h(s.spin))
 		})
 	})
 }

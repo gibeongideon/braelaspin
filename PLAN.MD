@@ -27,22 +27,34 @@ was "same idea, better, simplified, less code."
 3. **Correct money.** winzangu has three money bugs (§3). They must be
    impossible here by construction, not merely avoided by intent.
 
-### The stack (fixed by the brief)
+### The stack
 
 ```
-Flutter App (Android)
-     │
-     │ HTTPS (all money operations, idempotent)
-     │ WSS   (server→client push only, optional)
-     ▼
-Go API Server
-     │
-     ├── Redis      sessions (refresh tokens) · rate limits · idempotency · Daraja token
-     │
-     └── PostgreSQL users · wallets · transactions · spins · deposits · withdrawals · house
-     ▲
-     └── Safaricom Daraja webhooks (STK callback · B2C result · B2C timeout)
+Web app (TypeScript)          Flutter app (Android)
+        │                              │
+        └──────────┬───────────────────┘
+                   │ HTTPS (all money operations, idempotent)
+                   │ WSS   (server→client push only, optional)
+                   ▼
+             Go API Server
+                   │
+                   ├── Redis      sessions (refresh tokens) · rate limits · idempotency · Daraja token
+                   │
+                   └── PostgreSQL users · wallets · transactions · spins · deposits · withdrawals · house
+                   ▲
+                   └── Safaricom Daraja webhooks (STK callback · B2C result · B2C timeout)
 ```
+
+**Two clients, one API, one set of business rules.** The web app ships first and
+establishes the patterns; the Flutter app follows them. Neither client contains
+any game logic — the server decides every outcome and both clients only render
+it.
+
+**Frontend and backend deploy separately.** The API serves JSON only and never
+HTML; the web app is static files behind a CDN or nginx. They are different
+origins, so the API carries an exact-match CORS allowlist (`CORS_ORIGINS`) —
+no wildcard and no origin reflection, because a bearer token in the browser
+plus a reflected origin would let any site drive a logged-in user's wallet.
 
 One Go binary serves the API, runs migrations, and probes its own health.
 Background work is **one goroutine on a 60s ticker** guarded by
@@ -288,6 +300,75 @@ removing a column, a sentinel, a UI counter and a failure mode.
 
 ---
 
+## 7b. The web client — `web/`
+
+TypeScript, Vite, **zero runtime dependencies**. Mirrors the Flutter client's
+"zero pub dependencies" decision, for the same reason: the app is five screens
+and eleven pieces of state, and a framework would be more machinery than the
+problem needs.
+
+### The layering rule — this is the important part
+
+```
+web/src/
+├── core/     PURE business logic. No DOM. No framework. NO imports from ui/.
+│             types · api · store · signal · money · phone · errors · wheel
+│             ↑ THIS IS WHAT PORTS TO DART, essentially line for line
+│
+├── ui/       The ONLY code that touches the DOM.
+│             styles · dom · toast · wheel-view · app · screens/
+│
+└── main.ts   Composition root: builds the token store, the API client and the
+              Store, then mounts the UI. The only file that knows about both.
+```
+
+`npm run check:core` enforces the rule mechanically — it fails the build on any
+`document`, `window`, `localStorage`, or import from `ui/` inside `core/`. It is
+too easy to break by accident for code review to be the control.
+
+The payoff: `core/wheel.ts` becomes `lib/game/spin_math.dart`, `core/store.ts`
+becomes `lib/state/store.dart`, `core/errors.ts` becomes `lib/net/api_error.dart`
+— same structure, same names, same tests. The Flutter work becomes a
+transliteration of already-tested logic plus a `CustomPainter`.
+
+### Equivalences that make the port mechanical
+
+| Web | Flutter | Why they match |
+|---|---|---|
+| `Signal<T>` | `ValueNotifier<T>` | Same API: `.value`, `.subscribe`/`addListener` |
+| `core/store.ts` | `lib/state/store.dart` | Same eleven signals |
+| `core/wheel.ts` | `lib/game/spin_math.dart` | Identical maths, identical tests |
+| `WheelView` (canvas) | `CustomPainter` | Both: record the face once, rotate per frame |
+| `core/errors.ts` | `lib/net/api_error.dart` | One file holds every user-facing string |
+| `TokenStore` interface | Keystore-backed impl | Injected, so storage differs per platform |
+| single-flight `#refreshOnce` | same guard in Dart | Mandatory: refresh tokens rotate |
+
+### Design language
+
+From the supplied reference (`reference/still-*.webp`): warm near-black ground,
+amber brand gradient, **rounded tiles in a ring** rather than pie wedges, dark
+hub with a glowing mark, raised centre action in the bottom nav.
+
+Improvements on it: tiles carry the **real multipliers from the server** rather
+than arbitrary numbers, colour is keyed to prize tier, KES not USD, a visible
+focus ring on every control, a `prefers-reduced-motion` path that shows the
+outcome instantly rather than denying it, and a layout that holds past phone
+width instead of living inside a phone mock.
+
+### Deployment
+
+Two artefacts, deployed independently:
+
+| | |
+|---|---|
+| API | one static Go binary; distroless image; serves JSON only |
+| Web | `vite build` → static files; nginx/CDN; `VITE_API_BASE` baked at build time |
+
+Because `VITE_API_BASE` is compile-time, each environment needs its own build —
+which is the right trade for a static bundle with no runtime config fetch.
+
+---
+
 ## 8. Phases
 
 Status legend: ✅ done & verified · 🔨 in progress · ⬜ not started · 🚫 blocked
@@ -297,8 +378,11 @@ Status legend: ✅ done & verified · 🔨 in progress · ⬜ not started · �
 | **M0** | Toolchain & skeleton | ✅ | config fail-fast proven both ways; `/healthz` 200 while `/readyz` 503 with Redis down; graceful shutdown |
 | **M1** | Money foundation (schema, wallet, invariants) | ✅ | 10 integration tests incl. 200-goroutine and bankroll concurrency proofs; clean under `-race` |
 | **M2** | Auth | ✅ | 20 integration tests: atomic registration, non-enumerable login, rotating refresh (20 concurrent → exactly 1), `alg=none` rejected, instant suspension |
+| **W1** | Web scaffold: pure core, UI layer, wheel, screens | 🔨 | `check:core` passes; core unit tests green; `vite build` produces a small bundle |
+| **W2** | Web wired to the live API end to end | ⬜ | register → demo spin → history in a real browser against the running Go server |
+| **W3** | Web production deploy (nginx image, CORS, CSP) | ⬜ | built bundle served from its own origin, calling the API cross-origin |
 | **M3** | The wheel (Flutter `CustomPainter`, offline) | ⬜ | 200 consecutive spins land on the requested index; <8 ms/frame on the cheapest target device |
-| **M4** | Spin engine + app shell | 🔨 | engine + service done and statistically verified; **HTTP handlers and Flutter shell not started** |
+| **M4** | Spin engine HTTP + app shell | 🔨 | engine + service done and statistically verified; **HTTP handlers not started** |
 | **M5** | Real money, referrals, history | ⬜ | bankroll growth == turnover × 300/10000 to the cent |
 | **M6** | M-Pesa deposits | 🚫 | needs Daraja sandbox credentials (§11) |
 | **M7** | M-Pesa withdrawals | 🚫 | needs Daraja sandbox credentials (§11) |

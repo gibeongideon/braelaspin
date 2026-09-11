@@ -87,6 +87,29 @@ tunnel:
 	@echo "  B2C timeout  : <url>/webhooks/mpesa/b2c/timeout/\$$MPESA_CALLBACK_SECRET"
 	cloudflared tunnel --url http://localhost:8080
 
+## web-install: install web dependencies
+web-install:
+	cd web && npm install --no-audit --no-fund
+
+## web-dev: run the web app against a local API (needs `make run` in another shell)
+web-dev:
+	cd web && npm run dev
+
+## web-verify: typecheck + core purity + tests + build
+web-verify:
+	cd web && npm run verify
+
+## web-build: production bundle into web/dist
+web-build:
+	cd web && npm run build
+	@echo "--- bundle ---"
+	@find web/dist -type f ! -name '*.map' -exec du -h {} + | sort -h
+
+## web-docker: build the static-serving nginx image
+web-docker:
+	docker build -t braelaspin-web:local \
+	  --build-arg VITE_API_BASE=$${VITE_API_BASE:-http://localhost:8080} web
+
 ## app-run: run the Flutter app on a connected device
 app-run:
 	cd app && flutter run --dart-define=API_BASE=http://10.0.2.2:8080
@@ -106,4 +129,5 @@ app-size:
 	  printf "%-50s %6.1f MB\n" "$$(basename $$f)" "$$(echo "scale=1; $$sz/1048576" | bc)"; \
 	done
 
-.PHONY: help up down nuke migrate migrate-status run build test test-race test-integration fuzz vet tunnel app-run app-apk app-size
+.PHONY: help up down nuke migrate migrate-status run build test test-race test-integration fuzz vet tunnel \
+	web-install web-dev web-verify web-build web-docker app-run app-apk app-size
