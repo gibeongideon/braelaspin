@@ -112,6 +112,7 @@ func (s *Server) Routes(r chi.Router) {
 			r.Post("/wallet/demo/topup", s.h(s.demoTopUp))
 
 			r.Get("/game/config", s.h(s.gameConfig))
+			r.Get("/game/winners", s.h(s.winners))
 			r.Get("/game/spins", s.h(s.spins))
 			r.Get("/game/spins/by-ref/{ref}", s.h(s.spinByRef))
 			r.Get("/history", s.h(s.history))

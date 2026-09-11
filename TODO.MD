@@ -17,8 +17,8 @@
 | M1 | Money foundation | **✅ complete** |
 | M2 | Auth | **✅ complete** |
 | **W1** | **Web scaffold (TypeScript)** | **✅ complete** |
-| W2 | Web polish + deposit/withdraw screens | ⬜ blocked with M6/M7 |
-| W3 | Web production deploy | 🔨 image + nginx written, not deployed |
+| **W2** | **Web polish + payout accuracy** | **✅ complete** (deposit/withdraw still blocked on M6/M7) |
+| **W3** | **Production deploy + CI/CD** | **✅ live** at https://braelaspin.dafeapp.com |
 | M3 | Wheel widget (Flutter) | ⬜ not started |
 | M4 | Spin engine + app shell | 🔨 **HTTP handlers done**; Flutter UI pending |
 | M5 | Real money, referrals, history | ⬜ not started |
@@ -28,8 +28,9 @@
 | M9 | WebSocket push | ⬜ not started |
 | M10 | Hardening & release APK | ⬜ not started |
 
-**Written so far:** ~4,000 lines of Go + SQL across 19 files. 22 tests passing,
-clean under `go vet` and the race detector.
+**Written so far:** ~6,500 lines of Go, ~3,000 of TypeScript, 248 of SQL.
+**98 tests passing** (61 Go, 37 TypeScript), clean under `go vet`, the race
+detector, and the core-purity check. Live at https://braelaspin.dafeapp.com.
 
 ---
 
@@ -270,26 +271,91 @@ clean under `go vet` and the race detector.
 
 ---
 
-## ⬜ W2 — Web polish
+## ✅ W2 — Web polish + payout accuracy (COMPLETE)
 
-- [ ] Deposit screen + STK waiting view (90 s ring, 2 s→4 s poll ladder) — with M6
-- [ ] Withdraw screen + pending receipt — with M7
-- [ ] Real "recent winners" endpoint and wiring
-- [ ] Spin history screen (`/v1/game/spins` is already built)
-- [ ] Pull-to-refresh / retry affordances on list failures
-- [ ] Offline banner
+### Payout accuracy — the priority of this phase
+The rule, in the product owner's words: **"if the spinner hits 5, the win is
+bet × multiplier"**. That identity is now proved at four independent layers.
+
+- [x] `internal/game/math_test.go` — the definitive Go proof
+  - [x] `payout == stake × multiplier` for every wheel multiplier × 8 stakes
+  - [x] the brief's example pinned: KES 10 at 5× pays **KES 50**, net **KES 40**
+  - [x] **1× is exactly break-even** — required, or the RTP table is meaningless
+  - [x] 0× pays exactly 0
+  - [x] every wheel multiplier divides exactly, so no rounding occurs in production
+  - [x] truncation-toward-zero pinned for the fractional case, if one is ever added
+  - [x] no int64 overflow at the ceiling (10¹³, **922,337× headroom**)
+- [x] **Go ⇄ Postgres differential test** — both compute the payout and must agree
+      bit for bit across **116 stake/multiplier combinations**. Not an assumption
+      that two languages round alike; a proof.
+- [x] **Full ledger accounting asserted for all 12 segments**: player, referrer,
+      bankroll and rake each land on their exact expected value, and total money
+      in the system is **conserved** before vs after
+- [x] Demo spins use identical maths but move no real money, no house, no rake,
+      no commission
+- [x] Unreferred players pay commission to nobody (the reference implementation
+      paid user id 1)
+- [x] 400 real spins: rake is exactly 500 bp of turnover and the bankroll lands
+      on `start + turnover − payouts − rake` **to the cent**
+- [x] `web/src/core/outcome.ts` — the client **recomputes** the payout and throws
+      `PayoutMismatchError` rather than rendering a number it cannot verify
+- [x] Verified on the live deployment: **40 spins, 0 arithmetic errors**, tracked
+      balance matched the server exactly
+
+### The display bug this phase fixed
+- [x] The old overlay showed the **gross payout** with "Added to your balance".
+      At 1× that reads as a win while the balance does not move — which makes
+      players think the maths is broken, and they would be right to. The result
+      card now always shows **three** things: the multiplier, the arithmetic
+      (`KES 10 bet × 5 = KES 50`), and **what the balance actually did**.
+      1× is labelled "Your bet back — balance unchanged", not a win.
+
+### Screens and polish
+- [x] Spin history screen (`/v1/game/spins`) with `bet × mult = payout` on every
+      row, so a doubtful player can check us by eye
+- [x] Totals (spins / staked / returned) to reconcile against the balance
+- [x] `GET /v1/game/winners` — **real** wins only, real-money only, phones masked;
+      renders nothing rather than inventing names
+- [x] Offline banner, retry blocks on list failures, loading skeletons
+- [x] Invite moved to Profile when Spins took its tab slot
+
+### Still blocked
+- [ ] Deposit screen + STK waiting view — needs Daraja credentials (**M6**)
+- [ ] Withdraw screen + pending receipt — needs Daraja credentials (**M7**)
 - [ ] Playwright E2E: register → spin → history
 
 ---
 
-## 🔨 W3 — Web production deploy
+## ✅ W3 — Production deploy + CI/CD (LIVE)
 
-- [x] `web/Dockerfile` — node build stage → nginx static stage, runs typecheck + purity check + build
-- [x] `web/nginx.conf` — CSP, `X-Frame-Options: DENY`, immutable assets, SPA fallback
-- [ ] Point `connect-src` and `VITE_API_BASE` at the real API host
-- [ ] TLS termination (Caddy or the platform's)
-- [ ] CI: build both images, run `make web-verify`, gate on bundle size
-- [ ] Decide hosting (CDN vs the nginx image)
+**https://braelaspin.dafeapp.com** · also http://68.183.91.240 · see **DEPLOY.MD**
+
+- [x] Deployed to `trader@68.183.91.240` — Caddy + Postgres + Redis + systemd
+- [x] **Same-origin topology**: Caddy serves the web app at `/` and proxies
+      `/v1/*` to the API, so production has no CORS surface at all
+- [x] Let's Encrypt TLS on the domain (issued in ~5 s), HTTP→HTTPS 308 redirect
+- [x] Bare IP kept working on plain HTTP, from one shared Caddy snippet so the
+      two sites cannot drift
+- [x] `.github/workflows/deploy.yml` — push to `main` → test → build → deploy →
+      smoke test → **assert MT5 still running**; auto-rollback on failed health
+- [x] `deploy/deploy.sh` — same pipeline locally in ~20 s
+- [x] Dedicated ed25519 deploy key, revocable independently; host key pinned
+- [x] `index.html` served `no-cache`, hashed assets `immutable` for a year
+- [ ] **Add the three GitHub secrets** (`DEPLOY_SSH_KEY`, `DEPLOY_HOST`,
+      `DEPLOY_KNOWN_HOSTS`) and push — see DEPLOY.MD
+- [ ] Backups: nightly `pg_dump -Fc` + WAL archiving, restore drill ending in the
+      invariant suite
+- [ ] `APP_ENV=prod` (requires https, `sslmode=require`, callback IP enforcement)
+
+### MT5 protection (this host runs live trading)
+- [x] System-scoped units only; MT5's are user-scoped — no namespace overlap
+- [x] No Docker — its iptables/FORWARD changes are needless risk beside live
+      trading, and the daemon costs ~100 MB this box cannot spare
+- [x] `MemoryMax=384M`, `CPUWeight=50`, `OOMScoreAdjust=500` — under pressure the
+      kernel kills the API, never a trade
+- [x] No Go/Node on the server; it receives prebuilt artifacts
+- [x] Bootstrap refuses to run if 80/443/8080 are taken
+- [x] Every deploy asserts MT5 is alive — verified unchanged across all deploys
 
 ---
 

@@ -378,9 +378,9 @@ Status legend: ✅ done & verified · 🔨 in progress · ⬜ not started · �
 | **M0** | Toolchain & skeleton | ✅ | config fail-fast proven both ways; `/healthz` 200 while `/readyz` 503 with Redis down; graceful shutdown |
 | **M1** | Money foundation (schema, wallet, invariants) | ✅ | 10 integration tests incl. 200-goroutine and bankroll concurrency proofs; clean under `-race` |
 | **M2** | Auth | ✅ | 20 integration tests: atomic registration, non-enumerable login, rotating refresh (20 concurrent → exactly 1), `alg=none` rejected, instant suspension |
-| **W1** | Web scaffold: pure core, UI layer, wheel, screens | 🔨 | `check:core` passes; core unit tests green; `vite build` produces a small bundle |
-| **W2** | Web wired to the live API end to end | ⬜ | register → demo spin → history in a real browser against the running Go server |
-| **W3** | Web production deploy (nginx image, CORS, CSP) | ⬜ | built bundle served from its own origin, calling the API cross-origin |
+| **W1** | Web scaffold: pure core, UI layer, wheel, screens | ✅ | `check:core` passes; 37 core tests green; 16 KB gzipped bundle |
+| **W2** | Web polish + payout accuracy | ✅ | payout identity proved in Go, in SQL, differentially across both, and in the client; 40 live spins with 0 errors |
+| **W3** | Production deploy + CI/CD | ✅ | live on https://braelaspin.dafeapp.com with TLS; push-to-deploy; MT5 asserted intact |
 | **M3** | The wheel (Flutter `CustomPainter`, offline) | ⬜ | 200 consecutive spins land on the requested index; <8 ms/frame on the cheapest target device |
 | **M4** | Spin engine HTTP + app shell | 🔨 | engine + service done and statistically verified; **HTTP handlers not started** |
 | **M5** | Real money, referrals, history | ⬜ | bankroll growth == turnover × 300/10000 to the cent |

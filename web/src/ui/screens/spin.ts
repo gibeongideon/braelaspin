@@ -229,7 +229,7 @@ export function SpinScreen(store: Store, nav: (route: string) => void): {
 
     wheelWrap,
     spinsHint,
-    winnersStrip(),
+    winnersStrip(store),
 
     h('div', { class: 'card' },
       modeRow,
@@ -249,20 +249,32 @@ export function SpinScreen(store: Store, nav: (route: string) => void): {
 }
 
 /**
- * Recent winners. Placeholder data for the wireframe — wire to a real
- * endpoint in M5. Kept because it is strong social proof in the reference.
+ * Recent winners — real data, real-money wins only.
+ *
+ * Players are shown as masked phone numbers, which is what the server sends;
+ * the full number never leaves it. Renders nothing at all when there are no
+ * wins yet, rather than inventing names: fake social proof on a gambling site
+ * is a lie about other people's money.
  */
-function winnersStrip(): HTMLElement {
-  const sample = [
-    ['Ronald', 2300], ['Shawn', 1500], ['Leslie', 3000], ['Colette', 4500],
-  ] as const;
-  return h('div', { class: 'winners', 'aria-label': 'Recent winners' },
-    ...sample.map(([name, cents]) =>
-      h('div', { class: 'winner' },
-        h('span', { class: 'av', text: name[0] }),
-        h('span', { text: name }),
-        h('span', { class: 'amt', text: formatKes(cents, { symbol: false }) }),
-      ),
-    ),
-  );
+function winnersStrip(store: Store): HTMLElement {
+  const el = h('div', { class: 'winners', 'aria-label': 'Recent winners' });
+
+  store.api
+    .get<{ items: { name: string; payout_cents: number }[] }>('/v1/game/winners')
+    .then(({ items }) => {
+      if (!items?.length) {
+        el.remove();
+        return;
+      }
+      mount(el, ...items.map((wn) =>
+        h('div', { class: 'winner' },
+          h('span', { class: 'av', text: '👤' }),
+          h('span', { text: wn.name }),
+          h('span', { class: 'amt', text: formatKes(wn.payout_cents, { symbol: false }) }),
+        ),
+      ));
+    })
+    .catch(() => el.remove()); // decoration; never surface an error for it
+
+  return el;
 }
