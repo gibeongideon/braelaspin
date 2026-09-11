@@ -217,6 +217,82 @@ clean under `go vet` and the race detector.
 
 ---
 
+## ✅ W1 — Web scaffold, TypeScript (COMPLETE)
+
+> Web ships first and sets the patterns; Flutter follows them. See PLAN.MD §7b
+> for the layering rule and the web→Flutter equivalence table.
+
+### Decoupling — the rule this phase exists to establish
+- [x] `src/core/` is PURE: no DOM, no framework, no imports from `ui/`
+- [x] `src/ui/` is the only code that touches the DOM
+- [x] `src/main.ts` is the composition root — the only file that knows both
+- [x] **`npm run check:core` enforces it mechanically** and fails the build on any `document`/`window`/`localStorage`/`ui/` import inside `core/`
+- [x] Frontend and backend are separate deployables: API serves JSON only, web is static files
+
+### Core (ports to Dart essentially line for line)
+- [x] `types.ts` — the API contract, mirroring the Go DTOs
+- [x] `signal.ts` — `Signal<T>`, a direct ValueNotifier equivalent
+- [x] `api.ts` — **single-flight 401 refresh** (mandatory: refresh tokens rotate) + idempotency keys
+- [x] `store.ts` — the eleven signals + every operation; a **timeout is treated as unknown, not failed**, and triggers recovery by `client_ref`
+- [x] `money.ts` — cents formatting; `parseShillings` returns null rather than a silent 0
+- [x] `phone.ts` — mirrors `internal/auth/phone.go`, so users see the number that will be used
+- [x] `errors.ts` — every user-facing string in one file; server sends codes, not prose
+- [x] `wheel.ts` — pure spin maths: `targetAngle`, `indicatedSegment`, `easeOutQuart`, `tickTimes`
+
+### UI
+- [x] `styles.css` — design tokens from the reference: warm near-black, amber gradient, tile ring
+- [x] `wheel-view.ts` — canvas renderer; **face cached into an offscreen canvas**, one rotate+blit per frame
+- [x] `Ticker` — WebAudio tick, no asset to ship, created on first interaction so autoplay rules allow it
+- [x] Screens: auth · spin · wallet · history · refer · profile
+- [x] Bottom nav with the raised centre action, as in the reference
+- [x] `Scope` disposal so subscriptions don't pile up across navigations
+- [x] Toast system with **actions** — the insufficient-funds toast offers "Deposit"
+
+### Backend changes this required
+- [x] `internal/httpx/cors.go` — exact-match allowlist, **no wildcard, no origin reflection**
+- [x] `CORS_ORIGINS` config + a production assertion rejecting `http://` or localhost origins
+- [x] `internal/api/game.go` — `POST /v1/game/spin` (with Redis idempotency claim/store/release), `GET /v1/game/config`, `/v1/game/spins`, `/v1/game/spins/by-ref/{ref}`, `/v1/history`
+- [x] Keyset pagination (not OFFSET — it drifts on an append-only ledger and slows down as you page)
+
+### Verified
+- [x] `check:core` passes — core is provably DOM-free
+- [x] 26 core unit tests green, including: **every segment lands correctly over 2,400 randomised trials**, rotation is monotonic across spins, never stops on a boundary, the full Kenyan phone matrix, and `parseShillings` rejecting junk
+- [x] `tsc --noEmit` clean under `strict`
+- [x] **Bundle: 44 KB raw, ~16 KB gzipped** (12.15 JS + 3.23 CSS + 0.46 HTML)
+- [x] End-to-end against the live API: CORS preflight allowed for the web origin, **403 for an attacker origin**, register → config → 5 demo spins → idempotent replay returns the identical response → bankroll veto → history
+- [x] `Dockerfile` (nginx static) + `nginx.conf` with CSP, immutable asset caching, no-cache `index.html`, SPA fallback for `/r/<code>`
+
+### Known gaps
+- [ ] Refresh token is in `localStorage` — readable by any script on the origin. Better: httpOnly cookie (needs a backend change + CSRF story) — **M10**
+- [ ] Winners strip uses placeholder data — needs a real endpoint (**W2**)
+- [ ] Deposit/withdraw screens are stubs pending Daraja credentials (**M6/M7**)
+- [ ] No E2E browser test (Playwright) — core logic is unit-tested, screens are not
+
+---
+
+## ⬜ W2 — Web polish
+
+- [ ] Deposit screen + STK waiting view (90 s ring, 2 s→4 s poll ladder) — with M6
+- [ ] Withdraw screen + pending receipt — with M7
+- [ ] Real "recent winners" endpoint and wiring
+- [ ] Spin history screen (`/v1/game/spins` is already built)
+- [ ] Pull-to-refresh / retry affordances on list failures
+- [ ] Offline banner
+- [ ] Playwright E2E: register → spin → history
+
+---
+
+## 🔨 W3 — Web production deploy
+
+- [x] `web/Dockerfile` — node build stage → nginx static stage, runs typecheck + purity check + build
+- [x] `web/nginx.conf` — CSP, `X-Frame-Options: DENY`, immutable assets, SPA fallback
+- [ ] Point `connect-src` and `VITE_API_BASE` at the real API host
+- [ ] TLS termination (Caddy or the platform's)
+- [ ] CI: build both images, run `make web-verify`, gate on bundle size
+- [ ] Decide hosting (CDN vs the nginx image)
+
+---
+
 ## ⬜ M3 — Wheel widget (Flutter, offline)
 
 - [ ] `wheel_spec.dart` — segment fills/labels; **multipliers come from the API**, never hardcoded
