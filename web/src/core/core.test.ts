@@ -10,7 +10,8 @@ import { describe, it, expect } from 'vitest';
 import {
   targetAngle, indicatedSegment, segmentAngle, easeOutQuart,
   rotationAt, tickTimes, segmentArcDeg, boundaryAngleDeg,
-  SPIN_REVOLUTIONS, SPIN_DURATION_MS,
+  rotationWithSettle, settleOvershootDeg, restingRotation, easeInOutCubic,
+  SETTLE_FRACTION, SPIN_REVOLUTIONS, SPIN_DURATION_MS,
 } from './wheel';
 import { formatKes, formatSigned, parseShillings, formatMultiplier, formatWhen } from './money';
 import { normalisePhone, prettyPhone, maskPhone } from './phone';
@@ -167,6 +168,111 @@ describe('pointer alignment: drawn tiles vs the indicated segment', () => {
   it('rejects an out-of-range segment', () => {
     expect(() => segmentArcDeg(0, N)).toThrow(RangeError);
     expect(() => segmentArcDeg(N + 1, N)).toThrow(RangeError);
+  });
+});
+
+// ── overshoot and settle ───────────────────────────────────────────────────
+//
+// A physical wheel carries past the last peg and falls back. That is most of
+// what makes it feel real — and it is also the riskiest visual flourish in the
+// app, because if the wheel overshoots into the NEXT segment then for a few
+// frames the pointer sits on a prize the player did not win.
+//
+// These tests exist to make that impossible, not merely unlikely.
+describe('settle physics never shows the wrong prize', () => {
+  const mod360 = (d: number) => ((d % 360) + 360) % 360;
+
+  it('ends at EXACTLY the landing angle, so the assertion still holds', () => {
+    for (let seg = 1; seg <= N; seg++) {
+      const from = Math.random() * 3000;
+      const to = targetAngle(from, seg, N);
+      // Exact equality, not approximate: the final frame must be the angle
+      // that indicatedSegment was verified against.
+      expect(rotationWithSettle(from, to, SPIN_DURATION_MS, N)).toBe(to);
+      expect(rotationWithSettle(from, to, SPIN_DURATION_MS + 500, N)).toBe(to);
+    }
+  });
+
+  it('the pointer stays on the winning segment through the ENTIRE settle', () => {
+    for (let seg = 1; seg <= N; seg++) {
+      for (let trial = 0; trial < 20; trial++) {
+        const from = Math.random() * 3000;
+        const to = targetAngle(from, seg, N);
+        const brakeMs = SPIN_DURATION_MS * (1 - SETTLE_FRACTION);
+
+        // Sample every 5ms of the settle phase — the only window where the
+        // wheel is past its landing angle.
+        for (let t = brakeMs; t <= SPIN_DURATION_MS; t += 5) {
+          const r = rotationWithSettle(from, to, t, N);
+          expect(indicatedSegment(r, N)).toBe(seg);
+        }
+      }
+    }
+  });
+
+  it('the overshoot is bounded by the room inside the segment', () => {
+    const S = segmentAngle(N);
+    for (let seg = 1; seg <= N; seg++) {
+      for (let trial = 0; trial < 100; trial++) {
+        const to = targetAngle(0, seg, N);
+        const room = mod360(-to) % S; // distance to the leading edge
+        const over = settleOvershootDeg(to, N);
+        expect(over).toBeGreaterThanOrEqual(0);
+        // Strictly inside the room, or the pointer would cross the boundary.
+        expect(over).toBeLessThan(room + 1e-9);
+        expect(over).toBeLessThanOrEqual(S * 0.4);
+      }
+    }
+  });
+
+  it('actually overshoots — the flourish is present, not a no-op', () => {
+    const to = targetAngle(0, 5, N);
+    const peak = rotationWithSettle(0, to, SPIN_DURATION_MS * (1 - SETTLE_FRACTION), N);
+    expect(peak).toBeGreaterThan(to);
+    // toBeCloseTo, not toBe: `peak` comes out of a multiply-add interpolation,
+    // so it differs from the overshoot in the last couple of float bits. The
+    // value that must be exact is the FINAL angle, asserted above.
+    expect(peak - to).toBeCloseTo(settleOvershootDeg(to, N), 9);
+    expect(settleOvershootDeg(to, N)).toBeGreaterThan(1); // a visible flourish
+  });
+
+  it('is monotonic increasing up to the peak, then decreasing', () => {
+    const to = targetAngle(0, 9, N);
+    const brake = SPIN_DURATION_MS * (1 - SETTLE_FRACTION);
+    let prev = -Infinity;
+    for (let t = 0; t <= brake; t += 50) {
+      const r = rotationWithSettle(0, to, t, N);
+      expect(r).toBeGreaterThanOrEqual(prev - 1e-9);
+      prev = r;
+    }
+    prev = Infinity;
+    for (let t = brake; t <= SPIN_DURATION_MS; t += 10) {
+      const r = rotationWithSettle(0, to, t, N);
+      expect(r).toBeLessThanOrEqual(prev + 1e-9);
+      prev = r;
+    }
+  });
+
+  it('clamps at both ends', () => {
+    const to = targetAngle(100, 3, N);
+    expect(rotationWithSettle(100, to, -1, N)).toBe(100);
+    expect(rotationWithSettle(100, to, 0, N)).toBe(100);
+  });
+
+  it('easeInOutCubic is a proper 0..1 easing', () => {
+    expect(easeInOutCubic(0)).toBe(0);
+    expect(easeInOutCubic(1)).toBe(1);
+    expect(easeInOutCubic(0.5)).toBeCloseTo(0.5, 10);
+  });
+
+  it('the resting rotation centres a tile under the pointer', () => {
+    const rest = restingRotation(N);
+    const S = segmentAngle(N);
+    // Half a segment in, i.e. the middle of the tile.
+    expect(mod360(-rest) % S).toBeCloseTo(S / 2, 10);
+    // And it is still a valid, unambiguous reading.
+    expect(indicatedSegment(rest, N)).toBeGreaterThanOrEqual(1);
+    expect(indicatedSegment(rest, N)).toBeLessThanOrEqual(N);
   });
 });
 

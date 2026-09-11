@@ -98,7 +98,7 @@ export function SpinsScreen(store: Store): { el: HTMLElement; scope: Scope } {
   void load();
 
   const el = h('div', { class: 'screen' },
-    h('h1', { class: 'h1', text: 'Your spins' }),
+    h('h1', { class: 'h1', text: 'Results' }),
     h('p', { class: 'sub', text: 'Every result, with the maths shown.' }),
     h('div', { style: 'height:14px' }),
     summary,

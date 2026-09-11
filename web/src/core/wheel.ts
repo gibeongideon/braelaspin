@@ -120,6 +120,34 @@ export function boundaryAngleDeg(segment: number, segmentCount: number): number 
 }
 
 /**
+ * Fraction of the spin spent settling back after the overshoot.
+ * The wheel reaches its furthest point at (1 - SETTLE_FRACTION) of the
+ * duration, then eases back onto the resting angle.
+ */
+export const SETTLE_FRACTION = 0.14;
+
+/**
+ * How far past the landing angle the wheel travels before settling back.
+ *
+ * A physical prize wheel does not glide to a halt: the flapper clicks over the
+ * last peg, the wheel carries a little past it, and gravity pulls it back.
+ * Reproducing that is most of what makes a wheel feel real rather than
+ * animated.
+ *
+ * The overshoot is bounded so the pointer CANNOT leave the winning segment,
+ * even for a frame. In rotation space the pointer reads
+ * phi = mod360(-theta), so advancing theta by d moves the reading to phi - d;
+ * staying inside the winning segment therefore requires d <= (phi mod S),
+ * which is exactly the jitter targetAngle chose. Taking a fraction of that is
+ * provably safe, and is why this is computed rather than hardcoded.
+ */
+export function settleOvershootDeg(to: number, segmentCount: number): number {
+  const S = segmentAngle(segmentCount);
+  const room = mod360(-to) % S; // distance to the segment's leading edge
+  return Math.min(0.55 * room, S * 0.4);
+}
+
+/**
  * Quartic ease-out. Matches the reference implementation's GSAP Power3.easeOut
  * closely, and unlike a cubic-bezier approximation it is exact and cheap.
  */
@@ -138,6 +166,54 @@ export function rotationAt(
   if (elapsedMs >= durationMs) return to;
   if (elapsedMs <= 0) return from;
   return from + (to - from) * easeOutQuart(elapsedMs / durationMs);
+}
+
+/**
+ * Rotation with the overshoot-and-settle above.
+ *
+ * Two phases:
+ *   0 .. (1-SETTLE)   decelerate to `to + overshoot`   (quartic ease-out)
+ *   (1-SETTLE) .. 1   fall back from there to `to`     (cubic ease-in-out)
+ *
+ * GUARANTEE: at elapsed >= duration this returns EXACTLY `to`, so the landing
+ * assertion against the server's segment is unaffected. The overshoot is
+ * bounded by settleOvershootDeg, so the pointer never leaves the winning tile.
+ */
+export function rotationWithSettle(
+  from: number,
+  to: number,
+  elapsedMs: number,
+  segmentCount: number,
+  durationMs: number = SPIN_DURATION_MS,
+): number {
+  if (elapsedMs >= durationMs) return to; // exact, always
+  if (elapsedMs <= 0) return from;
+
+  const t = elapsedMs / durationMs;
+  const brake = 1 - SETTLE_FRACTION;
+  const peak = to + settleOvershootDeg(to, segmentCount);
+
+  if (t <= brake) {
+    return from + (peak - from) * easeOutQuart(t / brake);
+  }
+  const u = (t - brake) / SETTLE_FRACTION;
+  return peak + (to - peak) * easeInOutCubic(u);
+}
+
+/** Cubic ease-in-out — the settle has weight at both ends, like gravity. */
+export function easeInOutCubic(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+/**
+ * A resting rotation that centres a segment under the pointer.
+ *
+ * Segment 1 begins AT the pointer, so rotation 0 leaves it straddling a tile
+ * boundary — correct arithmetic, but it looks unfinished before the first
+ * spin. This offsets the wheel by half a segment purely for presentation.
+ */
+export function restingRotation(segmentCount: number): number {
+  return -segmentAngle(segmentCount) / 2;
 }
 
 /**

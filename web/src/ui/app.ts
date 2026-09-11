@@ -20,7 +20,7 @@ export type Route = 'spin' | 'wallet' | 'spins' | 'history' | 'refer' | 'profile
 
 const TABS: { route: Route; label: string; glyph: string; fab?: boolean }[] = [
   { route: 'wallet',  label: 'Wallet',  glyph: '👛' },
-  { route: 'spins',   label: 'Spins',   glyph: '🎡' },
+  { route: 'spins',   label: 'Results', glyph: '🎯' },
   { route: 'spin',    label: 'Spin',    glyph: '⚡', fab: true },
   { route: 'history', label: 'History', glyph: '🕘' },
   { route: 'profile', label: 'Profile', glyph: '👤' },

@@ -1,22 +1,31 @@
 /**
  * Canvas wheel renderer.
  *
- * Visual language follows the supplied reference: rounded rectangular TILES
- * arranged in a ring rather than pie wedges, a dark hub with a glowing brand
- * mark, and colour keyed to prize tier. Improvements on the reference: the
- * tiles carry real multipliers from the server rather than arbitrary numbers,
- * and the face is cached so a spin costs one transform per frame.
+ * Built to read as a physical prize wheel rather than a flat chart, using four
+ * cues that do most of the work:
  *
- * Performance shape — the same one the Flutter CustomPainter will use:
- *   - the static face is drawn ONCE into an offscreen canvas
- *   - each frame does rotate() + drawImage(), not 12 tiles + 12 text layouts
+ *   1. A FIXED light source. The rim bevel and the gloss are painted AFTER the
+ *      rotation, so highlights stay put while the wheel turns underneath. A
+ *      highlight that rotates with the wheel is the single clearest tell that
+ *      something is a drawing and not an object.
+ *   2. Depth on the rim — an outer bezel with a bevel gradient, and an inner
+ *      shadow where the tiles meet it.
+ *   3. Pegs that belong to the wheel, so they sweep past the fixed flapper.
+ *   4. Overshoot and settle, from core/wheel.ts.
  *
- * ALL geometry and easing comes from core/wheel.ts. This file only paints.
+ * Performance shape, unchanged and the same one the Flutter CustomPainter will
+ * use: the rotating face is recorded ONCE into an offscreen canvas, and each
+ * frame is one rotate + one blit plus the fixed overlays.
+ *
+ * ALL angles come from core/wheel.ts. This file paints; it does not compute
+ * geometry. When it did, it drifted half a segment and the pointer showed the
+ * wrong prize for every spin.
  */
 
 import {
-  targetAngle, rotationAt, indicatedSegment, tickTimes,
-  segmentAngle, segmentArcDeg, boundaryAngleDeg, SPIN_DURATION_MS,
+  targetAngle, rotationWithSettle, indicatedSegment, tickTimes,
+  segmentAngle, segmentArcDeg, boundaryAngleDeg, restingRotation,
+  SPIN_DURATION_MS,
 } from '../core/wheel';
 import type { Segment } from '../core/types';
 import { formatMultiplier } from '../core/money';
@@ -24,13 +33,25 @@ import { formatMultiplier } from '../core/money';
 const TAU = Math.PI * 2;
 const DEG = Math.PI / 180;
 
-/** Tier colours. Bigger prize, hotter tile. */
-function tierColours(multBp: number): { a: string; b: string; text: string } {
-  if (multBp === 0)         return { a: '#2b2026', b: '#211920', text: 'rgba(255,255,255,0.38)' };
-  if (multBp <= 20_000)     return { a: '#3fa34d', b: '#2f7d3a', text: '#ffffff' }; // 1x, 2x
-  if (multBp <= 100_000)    return { a: '#ff8a3d', b: '#d94f12', text: '#ffffff' }; // 5x, 10x
-  if (multBp <= 500_000)    return { a: '#f5c518', b: '#c9940a', text: '#3a2a00' }; // 50x
-  return { a: '#ff5ea8', b: '#c026a6', text: '#ffffff' };                            // 200x jackpot
+interface Tier { a: string; b: string; text: string; rim: string }
+
+/**
+ * Tier colours — bigger prize, hotter tile.
+ *
+ * Losing tiles alternate between two dark shades. A run of identical dark
+ * tiles reads as one big gap in the wheel; alternating keeps twelve distinct
+ * segments visible, which is what makes the spin legible.
+ */
+function tierColours(multBp: number, index: number): Tier {
+  if (multBp === 0) {
+    return index % 2 === 0
+      ? { a: '#3a3037', b: '#241d22', text: 'rgba(255,255,255,0.5)', rim: 'rgba(255,255,255,0.10)' }
+      : { a: '#2f262c', b: '#1d171b', text: 'rgba(255,255,255,0.42)', rim: 'rgba(255,255,255,0.07)' };
+  }
+  if (multBp <= 20_000) return { a: '#4fbf5f', b: '#2c7838', text: '#fff',    rim: 'rgba(255,255,255,0.3)' };
+  if (multBp <= 100_000) return { a: '#ff9648', b: '#d04a0e', text: '#fff',    rim: 'rgba(255,255,255,0.3)' };
+  if (multBp <= 500_000) return { a: '#ffd447', b: '#c28f06', text: '#3a2a00', rim: 'rgba(255,255,255,0.42)' };
+  return { a: '#ff6fb1', b: '#b81f96', text: '#fff', rim: 'rgba(255,255,255,0.36)' };
 }
 
 export interface WheelCallbacks {
@@ -61,12 +82,15 @@ export class WheelView {
   get spinning(): boolean { return this.#spinning; }
 
   setSegments(segments: Segment[]): void {
+    const first = this.#segments.length === 0;
     this.#segments = segments;
-    this.#face = null; // force a re-record
+    this.#face = null;
+    // Rest with a tile centred under the pointer rather than straddling a
+    // boundary. Cosmetic only — the landing maths is untouched.
+    if (first && segments.length) this.#rotation = restingRotation(segments.length);
     this.resize();
   }
 
-  /** Size to the element's box, accounting for device pixel ratio. */
   resize(): void {
     const rect = this.canvas.getBoundingClientRect();
     const css = Math.max(200, Math.min(rect.width || 320, 520));
@@ -78,18 +102,15 @@ export class WheelView {
     this.#paint();
   }
 
-  /**
-   * Animate to the segment the SERVER chose.
-   * Resolves when the wheel comes to rest.
-   */
+  /** Animate to the segment the SERVER chose. Resolves when it comes to rest. */
   spinTo(segment: number): Promise<void> {
-    if (this.#segments.length === 0) return Promise.resolve();
+    const n = this.#segments.length;
+    if (n === 0) return Promise.resolve();
 
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     const from = this.#rotation;
-    const to = targetAngle(from, segment, this.#segments.length);
+    const to = targetAngle(from, segment, n);
 
-    // Reduced motion: show the outcome immediately rather than denying it.
     if (reduced) {
       this.#rotation = to;
       this.#paint();
@@ -97,7 +118,7 @@ export class WheelView {
       return Promise.resolve();
     }
 
-    const ticks = tickTimes(from, to, this.#segments.length);
+    const ticks = tickTimes(from, to, n);
     let nextTick = 0;
     const started = performance.now();
     this.#spinning = true;
@@ -105,10 +126,10 @@ export class WheelView {
     return new Promise<void>((resolve) => {
       const frame = (now: number) => {
         const elapsed = now - started;
-        this.#rotation = rotationAt(from, to, elapsed);
+        this.#rotation = rotationWithSettle(from, to, elapsed, n);
         this.#paint();
 
-        while (nextTick < ticks.length && ticks[nextTick] <= elapsed) {
+        while (nextTick < ticks.length && ticks[nextTick]! <= elapsed) {
           this.#cb.onTick?.();
           nextTick++;
         }
@@ -122,10 +143,7 @@ export class WheelView {
         this.#paint();
         this.#spinning = false;
 
-        // The animation must agree with the server. If it ever does not, that
-        // is a geometry bug and we want to know in development rather than
-        // quietly showing the player the wrong prize.
-        const landed = indicatedSegment(to, this.#segments.length);
+        const landed = indicatedSegment(to, n);
         if (landed !== segment && import.meta.env.DEV) {
           console.error(
             `wheel landed on ${landed} but the server said ${segment} — spin maths is wrong`,
@@ -154,16 +172,23 @@ export class WheelView {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, px, px);
 
-    // One rotate + one blit per frame: the whole performance story.
+    // 1. the rotating face — one transform, one blit
+    ctx.save();
     ctx.translate(px / 2, px / 2);
     ctx.rotate(this.#rotation * DEG);
     ctx.drawImage(this.#face, -px / 2, -px / 2);
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.restore();
 
+    // 2-4. fixed overlays: the light does not turn with the wheel
+    ctx.save();
+    ctx.translate(px / 2, px / 2);
+    this.#paintBezel(ctx, px);
+    this.#paintGloss(ctx, px);
     this.#paintHub(ctx, px);
+    ctx.restore();
   }
 
-  /** Draws the static wheel once into an offscreen canvas. */
+  /** The rotating part: tiles, separators, pegs, labels. */
   #recordFace(): HTMLCanvasElement {
     const px = this.#size * this.#dpr;
     const face = document.createElement('canvas');
@@ -173,119 +198,212 @@ export class WheelView {
     ctx.translate(px / 2, px / 2);
 
     const n = this.#segments.length || 12;
-    const step = segmentAngle(n);
-    const outer = px / 2;
+    const R = px / 2;
 
-    // Ring geometry, proportional so it holds at any size.
-    const tileOuter = outer * 0.96;
-    const tileInner = outer * 0.50;
-    const tileH = tileOuter - tileInner;
-    const gap = step * 0.13; // angular gap between tiles
+    const tileOuter = R * 0.865;
+    const tileInner = R * 0.455;
+    const pegRadius = R * 0.905;
 
-    // Outer ring backdrop
+    // Backing disc, darker than any tile so the gaps read as depth.
     ctx.beginPath();
-    ctx.arc(0, 0, outer * 0.99, 0, TAU);
-    ctx.fillStyle = '#0d090b';
+    ctx.arc(0, 0, R * 0.95, 0, TAU);
+    ctx.fillStyle = '#0a0709';
     ctx.fill();
 
     this.#segments.forEach((seg, i) => {
-      // Geometry comes from core/wheel.ts, NOT from this file. When the
-      // renderer defined its own it drifted half a segment out and the
-      // pointer showed the wrong prize for every spin.
       const arc = segmentArcDeg(i + 1, n);
-      const start = (arc.startDeg + gap / 2) * DEG;
-      const end = (arc.endDeg - gap / 2) * DEG;
-      const { a, b, text } = tierColours(seg.multiplier_bp);
+      const gap = segmentAngle(n) * 0.045; // tight: a real wheel has thin dividers
+      const start = (arc.startDeg + gap) * DEG;
+      const end = (arc.endDeg - gap) * DEG;
+      const mid = arc.midDeg * DEG;
+      const t = tierColours(seg.multiplier_bp, i);
 
-      // Tile: an annular sector with rounded ends, which reads as the
-      // reference's rounded rectangles once the ring is closed.
       ctx.beginPath();
       ctx.arc(0, 0, tileOuter, start, end);
       ctx.arc(0, 0, tileInner, end, start, true);
       ctx.closePath();
 
-      const mid = arc.midDeg * DEG;
-      const grad = ctx.createLinearGradient(
-        Math.cos(mid) * tileInner, Math.sin(mid) * tileInner,
-        Math.cos(mid) * tileOuter, Math.sin(mid) * tileOuter,
-      );
-      grad.addColorStop(0, b);
-      grad.addColorStop(1, a);
-      ctx.fillStyle = grad;
+      // Radial gradient: lighter at the rim, darker toward the hub, so each
+      // tile looks like a lit surface rather than flat fill.
+      const g = ctx.createRadialGradient(0, 0, tileInner, 0, 0, tileOuter);
+      g.addColorStop(0, t.b);
+      g.addColorStop(0.75, t.a);
+      g.addColorStop(1, t.b);
+      ctx.fillStyle = g;
       ctx.fill();
 
-      if (seg.multiplier_bp > 0) {
-        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-        ctx.lineWidth = Math.max(1, px * 0.002);
-        ctx.stroke();
-      }
-
-      // Label, upright relative to its own radius.
+      // Bright outer edge — the catch of light on a raised face.
       ctx.save();
-      ctx.rotate(mid + Math.PI / 2);
-      ctx.translate(0, -(tileInner + tileH * 0.52));
-      ctx.fillStyle = text;
-      ctx.font = `800 ${Math.round(px * 0.052)}px system-ui, sans-serif`;
+      ctx.clip();
+      ctx.beginPath();
+      ctx.arc(0, 0, tileOuter - px * 0.004, start, end);
+      ctx.strokeStyle = t.rim;
+      ctx.lineWidth = px * 0.008;
+      ctx.stroke();
+      ctx.restore();
+
+      // Label, radial, flipped in the lower half so it is never upside down.
+      const midDeg = arc.midDeg;
+      const upsideDown = Math.cos(mid) < 0;
+      ctx.save();
+      ctx.rotate(mid);
+      ctx.translate((tileInner + tileOuter) / 2, 0);
+      ctx.rotate(upsideDown ? Math.PI : 0);
+      ctx.fillStyle = t.text;
+      ctx.font = `800 ${Math.round(px * (seg.multiplier_bp >= 500_000 ? 0.049 : 0.055))}px system-ui, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
+      if (seg.multiplier_bp > 0) {
+        ctx.shadowColor = 'rgba(0,0,0,0.45)';
+        ctx.shadowBlur = px * 0.01;
+        ctx.shadowOffsetY = px * 0.002;
+      }
       ctx.fillText(formatMultiplier(seg.multiplier_bp), 0, 0);
       ctx.restore();
+      void midDeg;
     });
 
-    // Pins on the tile boundaries, from the same shared formula.
+    // Pegs belong to the WHEEL, so they sweep past the fixed flapper — which
+    // is what the ticking is.
     for (let i = 1; i <= n; i++) {
-      const angle = boundaryAngleDeg(i, n) * DEG;
-      const r = tileOuter + px * 0.008;
+      const a = boundaryAngleDeg(i, n) * DEG;
+      const x = Math.cos(a) * pegRadius;
+      const y = Math.sin(a) * pegRadius;
+      const r = px * 0.0105;
+
       ctx.beginPath();
-      ctx.arc(Math.cos(angle) * r, Math.sin(angle) * r, px * 0.008, 0, TAU);
-      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.arc(x, y, r, 0, TAU);
+      const pg = ctx.createRadialGradient(x - r * 0.4, y - r * 0.4, r * 0.1, x, y, r);
+      pg.addColorStop(0, '#ffffff');
+      pg.addColorStop(0.5, '#cdd2d8');
+      pg.addColorStop(1, '#6b7280');
+      ctx.fillStyle = pg;
       ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+      ctx.lineWidth = px * 0.0022;
+      ctx.stroke();
     }
 
     return face;
   }
 
-  /** The hub does not rotate, so it is painted fresh each frame. */
-  #paintHub(ctx: CanvasRenderingContext2D, px: number): void {
-    const r = px * 0.21;
-    ctx.save();
-    ctx.translate(px / 2, px / 2);
+  /** Fixed outer bezel with a bevel, lit from the top left. */
+  #paintBezel(ctx: CanvasRenderingContext2D, px: number): void {
+    const R = px / 2;
+    const w = px * 0.022;
+    const r = R * 0.955;
+
+    const g = ctx.createLinearGradient(-r, -r, r, r);
+    g.addColorStop(0, '#6d6068');
+    g.addColorStop(0.3, '#2b2329');
+    g.addColorStop(0.55, '#151013');
+    g.addColorStop(0.8, '#3a3138');
+    g.addColorStop(1, '#0e0a0c');
 
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, TAU);
-    const g = ctx.createRadialGradient(0, 0, r * 0.2, 0, 0, r);
-    g.addColorStop(0, '#241a20');
-    g.addColorStop(1, '#100b0e');
-    ctx.fillStyle = g;
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.10)';
-    ctx.lineWidth = Math.max(1, px * 0.004);
+    ctx.strokeStyle = g;
+    ctx.lineWidth = w;
     ctx.stroke();
 
-    // Brand mark
+    // Inner shadow where the tiles meet the bezel — reads as recess.
     ctx.beginPath();
-    ctx.arc(0, 0, r * 0.52, 0, TAU);
-    const bg = ctx.createLinearGradient(-r * 0.5, -r * 0.5, r * 0.5, r * 0.5);
-    bg.addColorStop(0, '#ff8a3d');
-    bg.addColorStop(1, '#d94f12');
-    ctx.fillStyle = bg;
+    ctx.arc(0, 0, r - w * 0.6, 0, TAU);
+    ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+    ctx.lineWidth = px * 0.012;
+    ctx.stroke();
+
+    // Thin bright keyline at the very edge.
+    ctx.beginPath();
+    ctx.arc(0, 0, r + w * 0.5, 0, TAU);
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+    ctx.lineWidth = px * 0.003;
+    ctx.stroke();
+  }
+
+  /**
+   * Specular sweep. Painted after the rotation so the highlight stays anchored
+   * to the top-left while the wheel turns beneath it.
+   */
+  #paintGloss(ctx: CanvasRenderingContext2D, px: number): void {
+    const R = px / 2 * 0.94;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(0, 0, R, 0, TAU);
+    ctx.clip();
+
+    const g = ctx.createLinearGradient(-R, -R, R * 0.45, R * 0.55);
+    g.addColorStop(0, 'rgba(255,255,255,0.13)');
+    g.addColorStop(0.38, 'rgba(255,255,255,0.035)');
+    g.addColorStop(0.7, 'rgba(255,255,255,0)');
+    g.addColorStop(1, 'rgba(0,0,0,0.20)');
+    ctx.fillStyle = g;
+    ctx.fillRect(-R, -R, R * 2, R * 2);
+    ctx.restore();
+  }
+
+  /** Fixed hub: recessed ring, brushed plate, brand disc. */
+  #paintHub(ctx: CanvasRenderingContext2D, px: number): void {
+    const r = px * 0.225;
+
+    // Recess ring
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.06, 0, TAU);
+    ctx.fillStyle = '#0a0709';
     ctx.fill();
 
+    // Brushed plate, lit top-left
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, TAU);
+    const plate = ctx.createLinearGradient(-r, -r, r, r);
+    plate.addColorStop(0, '#3b323a');
+    plate.addColorStop(0.45, '#221b20');
+    plate.addColorStop(1, '#100c0f');
+    ctx.fillStyle = plate;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.09)';
+    ctx.lineWidth = px * 0.0035;
+    ctx.stroke();
+
+    // Brand disc with a warm glow
+    const br = r * 0.56;
+    ctx.save();
+    ctx.shadowColor = 'rgba(242,107,33,0.55)';
+    ctx.shadowBlur = px * 0.045;
+    ctx.beginPath();
+    ctx.arc(0, 0, br, 0, TAU);
+    const bg = ctx.createLinearGradient(-br, -br, br, br);
+    bg.addColorStop(0, '#ffa45c');
+    bg.addColorStop(0.5, '#f26b21');
+    bg.addColorStop(1, '#c53f08');
+    ctx.fillStyle = bg;
+    ctx.fill();
+    ctx.restore();
+
+    // Top-edge highlight on the disc
+    ctx.beginPath();
+    ctx.arc(0, 0, br * 0.97, Math.PI * 1.08, Math.PI * 1.92);
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.lineWidth = px * 0.004;
+    ctx.stroke();
+
     ctx.fillStyle = '#fff';
-    ctx.font = `700 ${Math.round(r * 0.62)}px system-ui, sans-serif`;
+    ctx.font = `700 ${Math.round(br * 1.05)}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('⚡', 0, r * 0.02);
-
-    ctx.restore();
+    ctx.shadowColor = 'rgba(0,0,0,0.35)';
+    ctx.shadowBlur = px * 0.008;
+    ctx.fillText('⚡', 0, br * 0.04);
+    ctx.shadowBlur = 0;
   }
 }
 
 /**
  * Tick sound, synthesised with WebAudio.
  *
- * No asset to ship, and no autoplay problem: the context is created on the
- * user's first interaction (the SPIN press) so browsers permit it.
+ * Two oscillators shaped like a peg striking a flapper: a short noisy click
+ * plus a woody body tone. No asset to ship, and the context is created on the
+ * user's first interaction so autoplay policy permits it.
  */
 export class Ticker {
   #ctx: AudioContext | null = null;
@@ -296,15 +414,28 @@ export class Ticker {
     try {
       this.#ctx ??= new AudioContext();
       const ctx = this.#ctx;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'square';
-      osc.frequency.value = 1350;
-      gain.gain.setValueAtTime(0.05, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.035);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.04);
+      const now = ctx.currentTime;
+
+      const click = ctx.createOscillator();
+      const clickGain = ctx.createGain();
+      click.type = 'square';
+      click.frequency.setValueAtTime(1750, now);
+      click.frequency.exponentialRampToValueAtTime(820, now + 0.02);
+      clickGain.gain.setValueAtTime(0.045, now);
+      clickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.03);
+      click.connect(clickGain).connect(ctx.destination);
+      click.start(now);
+      click.stop(now + 0.035);
+
+      const body = ctx.createOscillator();
+      const bodyGain = ctx.createGain();
+      body.type = 'triangle';
+      body.frequency.setValueAtTime(320, now);
+      bodyGain.gain.setValueAtTime(0.03, now);
+      bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.055);
+      body.connect(bodyGain).connect(ctx.destination);
+      body.start(now);
+      body.stop(now + 0.06);
     } catch {
       // Audio is a nicety; never let it break the spin.
     }
