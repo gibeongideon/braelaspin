@@ -340,6 +340,50 @@ bet × multiplier"**. That identity is now proved at four independent layers.
 - [x] Verified live: loss `499000→499000 (+0)`, 2× `498000→500000 (+2000)`,
       1× refund `499000→500000 (+1000)`, 5× `+5000`
 
+### Second math audit — adversarial pass
+Hunting for what was *not* yet proved, rather than re-running what passed.
+**Three real defects found and fixed**, all in guard rails rather than the
+payout identity itself.
+
+- [x] **Overflow could defeat admission control.** `MaxExposure` computed
+      `stake × 2,000,000 / 10000` unguarded. Above ~4.6e12 cents that wraps
+      NEGATIVE, and a negative exposure makes `bankroll < exposure` false — so
+      a stake no bankroll could cover would be **admitted and paid**. Reachable
+      only via a misplaced zero in `MAX_STAKE_CENTS`, but now fails closed
+      (returns `MaxInt64`, vetoed by every finite bankroll) and
+      `game.ValidateStakeCeiling` refuses such a config at startup.
+- [x] **`MaxAffordableStake` could return a negative maximum** on a bankroll
+      above ~9.2e14 cents, and separately could advertise a stake above the
+      safe ceiling that `MaxExposure` then vetoes — `GET /game/config` would
+      promise a bet the server refuses. Now divides before multiplying and
+      clamps to `MaxSafeStake()`. **My own new test caught the second half of
+      this.**
+- [x] **`clampStake` treated 0 as "no limit".** `cfg.max_stake_cents || MAX_SAFE`
+      disabled the clamp in exactly the two cases it exists for: an empty
+      bankroll (real-money cap of zero) and an empty wallet. Replaced with an
+      explicit `maxStake()` that the hint text and the clamp now share, so the
+      number shown is the number the server would accept.
+- [x] **Latent:** the schema pins `segment_index BETWEEN 1 AND 12`. Changing the
+      wheel size would fail every insert *on a player's spin*; `game.Validate`
+      now catches the mismatch at startup instead.
+
+### Verified in this pass
+- [x] `rake + referral ≤ house edge` — already asserted in config (500+200 ≤ 1000)
+- [x] Admission control is **conservative**: it requires `200 × stake` while the
+      true worst case needs `199 × stake + rake + commission`
+- [x] **Per-spin truncation** pinned: `Σ floor(sᵢ·r/10000) ≠ floor(Σ sᵢ·r/10000)`.
+      Awkward stakes (501, 733, 999, 2507…) gave per-spin rake 1093 vs bulk
+      1098 — the 5-cent gap **stays in the bankroll**, so the books still balance
+      exactly. Anyone reconciling rake against turnover must expect this.
+- [x] **JS doubles vs exact integers**: `expectedPayout` brute-forced against
+      BigInt across the full wheel, every awkward stake, **20,000 random pairs**,
+      and every boundary within ±1 of a multiple of 10000. Zero divergence.
+- [x] **Invariants run against LIVE PRODUCTION data** — 5 users, 103 spins,
+      152 ledger rows: no balance drift (real or demo), nothing negative, demo
+      and real never mixed, **all 103 spins exact**, every spin's bet and win
+      present in the ledger, no double-paid commission, append-only rules
+      (`tx_no_update`, `tx_no_delete`) still attached.
+
 ### Screens and polish
 - [x] Spin history screen (`/v1/game/spins`) with `bet × mult = payout` on every
       row, so a doubtful player can check us by eye
