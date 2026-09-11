@@ -73,6 +73,29 @@ func (c *Client) DelRefresh(ctx context.Context, jti string) error {
 	return c.r.Del(ctx, rtKey(jti)).Err()
 }
 
+// ConsumeRefresh atomically reads AND deletes a refresh token, so exactly one
+// caller can ever redeem it.
+//
+// This must not be a Get followed by a Del. With rotating refresh tokens, N
+// concurrent refreshes would then all read the same live token, all delete it
+// (deletes being idempotent), and all issue new pairs — the same lost-update
+// shape the wallet code takes such care to avoid. GETDEL is one round trip and
+// one atomic operation, so the losers see ErrNotFound and are correctly told
+// the token was reused.
+func (c *Client) ConsumeRefresh(ctx context.Context, jti string) (userID int64, family string, err error) {
+	v, err := c.r.GetDel(ctx, rtKey(jti)).Result()
+	if errors.Is(err, redis.Nil) {
+		return 0, "", ErrNotFound
+	}
+	if err != nil {
+		return 0, "", err
+	}
+	if _, err := fmt.Sscanf(v, "%d|%s", &userID, &family); err != nil {
+		return 0, "", fmt.Errorf("rds: malformed refresh value %q: %w", v, err)
+	}
+	return userID, family, nil
+}
+
 // ── user bans / force-logout ─────────────────────────────────────────────────
 // Set when a user is suspended or logs out everywhere. The auth middleware
 // checks it, so a suspension takes effect within a second even though the

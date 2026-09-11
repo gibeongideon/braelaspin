@@ -78,17 +78,18 @@ func (s *Server) h(fn handler) http.HandlerFunc {
 	}
 }
 
-// Rate limits. Login is per phone+IP so one attacker cannot lock out a
-// legitimate user by hammering their number from elsewhere; register is per IP.
-var (
-	limitLogin    = httpx.RateLimitSpec{Action: "login", Limit: 5, Window: 5 * time.Minute}
-	limitRegister = httpx.RateLimitSpec{Action: "register", Limit: 3, Window: time.Hour}
-	limitRefresh  = httpx.RateLimitSpec{Action: "refresh", Limit: 30, Window: time.Minute}
-	limitRead     = httpx.RateLimitSpec{Action: "read", Limit: 120, Window: time.Minute, ByUser: true}
-)
-
 // Routes mounts the v1 API.
+//
+// Limits come from config so they can be moved per environment without a
+// rebuild. The unauthenticated ones are keyed by IP; reads are keyed by user.
 func (s *Server) Routes(r chi.Router) {
+	var (
+		limitRegister = httpx.RateLimitSpec{Action: "register", Limit: s.cfg.RLRegisterPerHour, Window: time.Hour}
+		limitLogin    = httpx.RateLimitSpec{Action: "login", Limit: s.cfg.RLLoginPer5Min, Window: 5 * time.Minute}
+		limitRefresh  = httpx.RateLimitSpec{Action: "refresh", Limit: s.cfg.RLRefreshPerMin, Window: time.Minute}
+		limitRead     = httpx.RateLimitSpec{Action: "read", Limit: s.cfg.RLReadPerMin, Window: time.Minute, ByUser: true}
+	)
+
 	r.Route("/v1", func(r chi.Router) {
 		r.Use(httpx.Timeout(10 * time.Second))
 

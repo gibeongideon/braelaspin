@@ -59,6 +59,15 @@ type Config struct {
 	MaxWithdrawCents     int64
 	AutoApproveCeilCents int64
 
+	// rate limits — tunable per environment so abuse thresholds can be moved
+	// without a rebuild (and so tests can relax them)
+	RLLoginPer5Min    int
+	RLRegisterPerHour int
+	RLRefreshPerMin   int
+	RLSpinPerMin      int
+	RLReadPerMin      int
+	RLDepositPer5Min  int
+
 	// m-pesa shared
 	MpesaEnv            string
 	MpesaBaseURL        string
@@ -261,6 +270,14 @@ func Load() (*Config, error) {
 	c.MinWithdrawCents = l.i64("MIN_WITHDRAW_CENTS", 10_000)
 	c.MaxWithdrawCents = l.i64("MAX_WITHDRAW_CENTS", 7_000_000)
 	c.AutoApproveCeilCents = l.i64("AUTO_APPROVE_CEILING_CENTS", 0)
+
+	// ── rate limits ────────────────────────────────────────────────────────
+	c.RLLoginPer5Min = l.intn("RL_LOGIN_PER_5MIN", 5)
+	c.RLRegisterPerHour = l.intn("RL_REGISTER_PER_HOUR", 3)
+	c.RLRefreshPerMin = l.intn("RL_REFRESH_PER_MIN", 30)
+	c.RLSpinPerMin = l.intn("RL_SPIN_PER_MIN", 60)
+	c.RLReadPerMin = l.intn("RL_READ_PER_MIN", 120)
+	c.RLDepositPer5Min = l.intn("RL_DEPOSIT_PER_5MIN", 5)
 
 	// ── m-pesa ─────────────────────────────────────────────────────────────
 	c.MpesaEnv = l.oneOf("MPESA_ENV", "sandbox", "sandbox", "production")

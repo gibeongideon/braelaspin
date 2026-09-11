@@ -147,16 +147,23 @@ func (s *TokenService) VerifyAccess(ctx context.Context, raw string) (*Claims, e
 // lookupAdmin is called with the user id so the new access token carries an
 // up-to-date admin flag rather than replaying whatever the old one claimed.
 func (s *TokenService) Rotate(ctx context.Context, refresh string, lookupAdmin func(context.Context, int64) (bool, error)) (*Tokens, error) {
-	userID, family, err := s.redis.GetRefresh(ctx, refresh)
+	// Consume the token atomically: read and delete in one operation, so
+	// exactly one caller can redeem it. A Get-then-Del here would let N
+	// concurrent refreshes all succeed on the same token.
+	//
+	// Consuming BEFORE issuing is also deliberate. If we crash between the two
+	// the user simply logs in again; the reverse order would leave a usable
+	// duplicate in circulation.
+	userID, family, err := s.redis.ConsumeRefresh(ctx, refresh)
 	if errors.Is(err, rds.ErrNotFound) {
-		// The token is unknown. Either it expired, or it was already rotated
-		// and someone is presenting it a second time. We cannot distinguish
-		// the two, so treat it as the dangerous case: if a family is still
-		// live, kill it. A legitimate client never presents a rotated token.
+		// Unknown token. Either it expired, or it was already rotated and is
+		// being presented a second time — the signature of a stolen token. We
+		// cannot distinguish the two, so we treat it as the dangerous case. A
+		// legitimate client never presents a rotated token.
 		return nil, ErrTokenReused
 	}
 	if err != nil {
-		return nil, fmt.Errorf("auth: load refresh token: %w", err)
+		return nil, fmt.Errorf("auth: consume refresh token: %w", err)
 	}
 
 	banned, err := s.redis.IsBanned(ctx, userID)
@@ -165,13 +172,6 @@ func (s *TokenService) Rotate(ctx context.Context, refresh string, lookupAdmin f
 	}
 	if banned {
 		return nil, ErrUserSuspended
-	}
-
-	// Consume the old token before issuing the new one. If we crash between
-	// the two the user simply logs in again; the reverse order would leave a
-	// usable duplicate.
-	if err := s.redis.DelRefresh(ctx, refresh); err != nil {
-		return nil, fmt.Errorf("auth: consume refresh token: %w", err)
 	}
 
 	isAdmin := false
