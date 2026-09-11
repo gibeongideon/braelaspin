@@ -699,6 +699,10 @@ button { cursor: pointer; border: 0; background: none; }
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+  /* The rays and confetti are never built when reduced motion is set (see
+     result-overlay.ts), but hide them belt-and-braces in case the preference
+     changes while a card is open. */
+  .rc-rays, .rc-confetti { display: none !important; }
 }
 
 /* Past phone width, keep the column and let the ambient wash breathe rather
@@ -711,71 +715,189 @@ button { cursor: pointer; border: 0; background: none; }
   }
 }
 
-/* ── result overlay ─────────────────────────────────────────────────────────
-   Shows gross payout and net change together — see ui/result-overlay.ts for
-   why both are always present. */
+/* ── result card ───────────────────────────────────────────────────────────
+   Tiered by prize (see core/celebration.ts). The celebration is the wrapper;
+   the numbers inside it stay literal — gross payout, the arithmetic, and the
+   real balance change. */
 
-.result-overlay {
+.rc-overlay {
   position: fixed;
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgba(8, 5, 7, 0.72);
-  backdrop-filter: blur(3px);
+  background: rgba(8, 5, 7, 0.74);
+  backdrop-filter: blur(4px);
   z-index: 50;
-  animation: fade 0.2s var(--ease);
+  overflow: hidden;
+  animation: rc-fade 0.18s var(--ease);
+}
+.rc-overlay.leaving { animation: rc-fade 0.18s var(--ease) reverse forwards; }
+@keyframes rc-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* A warm bloom behind everything for the loud tiers. */
+.rc-overlay.big::before,
+.rc-overlay.huge::before,
+.rc-overlay.jackpot::before {
+  content: "";
+  position: absolute;
+  width: 150vmax; height: 150vmax;
+  background: radial-gradient(circle, rgba(255, 138, 61, 0.16), transparent 42%);
+  animation: rc-breathe 2.4s ease-in-out infinite;
+}
+.rc-overlay.jackpot::before { background: radial-gradient(circle, rgba(255, 94, 168, 0.22), transparent 42%); }
+@keyframes rc-breathe {
+  0%, 100% { transform: scale(0.9); opacity: 0.75; }
+  50%      { transform: scale(1.05); opacity: 1; }
 }
 
-.result-card {
+.rc-card {
+  position: relative;
   text-align: center;
-  padding: 28px 34px;
-  border-radius: 26px;
-  min-width: 260px;
-  background: linear-gradient(160deg, #241a20, #16120f);
+  padding: 30px 36px 24px;
+  border-radius: 28px;
+  min-width: 272px;
+  background: linear-gradient(165deg, #2a2028, #14100f);
   border: 1px solid var(--border-2);
-  box-shadow: 0 22px 60px -18px rgba(0, 0, 0, 0.9);
-  animation: pop 0.3s var(--ease);
+  box-shadow: 0 26px 70px -20px rgba(0, 0, 0, 0.92);
+  /* Overshoot on entry: the card lands with weight, like the wheel does. */
+  animation: rc-pop 0.42s cubic-bezier(0.18, 1.5, 0.42, 1);
 }
-.result-card.win    { background: linear-gradient(160deg, #23301f, #16120f); border-color: rgba(63,163,77,.5); }
-.result-card.refund { background: linear-gradient(160deg, #2b2a1c, #16120f); border-color: rgba(245,197,24,.4); }
-.result-card.loss   { background: linear-gradient(160deg, #2a1e22, #16120f); border-color: var(--border-2); }
-
-.result-mult {
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  color: var(--amber-hi);
+@keyframes rc-pop {
+  from { opacity: 0; transform: scale(0.72) translateY(14px); }
+  to   { opacity: 1; transform: none; }
 }
-.result-card.loss .result-mult { color: var(--t3); }
 
-.result-amt {
-  font-size: 34px;
-  font-weight: 800;
-  margin: 6px 0 2px;
+.rc-card.loss    { background: linear-gradient(165deg, #251c20, #141010); }
+.rc-card.refund  { border-color: rgba(245, 197, 24, 0.42); background: linear-gradient(165deg, #2c2718, #14100f); }
+.rc-card.small   { border-color: rgba(79, 191, 95, 0.5);  background: linear-gradient(165deg, #1f2f1f, #12100f); }
+.rc-card.big     { border-color: rgba(255, 138, 61, 0.6); background: linear-gradient(165deg, #33210f, #14100f); }
+.rc-card.huge    { border-color: rgba(255, 212, 71, 0.65); background: linear-gradient(165deg, #352a0d, #14100f); }
+.rc-card.jackpot { border-color: rgba(255, 94, 168, 0.7);  background: linear-gradient(165deg, #34112a, #14100f); }
+
+/* Rotating rays, clipped to the card. The classic prize-wheel starburst. */
+.rc-rays {
+  position: absolute;
+  inset: -60%;
+  background: repeating-conic-gradient(
+    from 0deg,
+    rgba(255, 255, 255, 0.085) 0deg 9deg,
+    transparent 9deg 18deg
+  );
+  animation: rc-spin 14s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+  mask-image: radial-gradient(circle, #000 18%, transparent 62%);
+}
+.rc-card.jackpot .rc-rays {
+  background: repeating-conic-gradient(
+    from 0deg,
+    rgba(255, 94, 168, 0.16) 0deg 7deg,
+    transparent 7deg 14deg
+  );
+  animation-duration: 9s;
+}
+@keyframes rc-spin { to { transform: rotate(360deg); } }
+
+/* The multiplier as a token, echoing the wheel tile it came from. */
+.rc-badge {
+  position: relative;
+  z-index: 1;
+  width: 62px; height: 62px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 19px; font-weight: 800;
   font-variant-numeric: tabular-nums;
+  background: linear-gradient(150deg, #4a3f47, #221b20);
+  border: 2px solid rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.1), 0 6px 16px -6px rgba(0, 0, 0, 0.8);
+  color: var(--t2);
 }
-.result-card.win .result-amt    { color: var(--green-hi); }
-.result-card.refund .result-amt { color: var(--gold); }
-.result-card.loss .result-amt   { color: var(--t2); }
+.rc-card.small   .rc-badge { background: linear-gradient(150deg, #5fd070, #2c7838); color: #fff; border-color: rgba(255,255,255,0.3); }
+.rc-card.big     .rc-badge { background: linear-gradient(150deg, #ffa45c, #d04a0e); color: #fff; border-color: rgba(255,255,255,0.34); }
+.rc-card.huge    .rc-badge { background: linear-gradient(150deg, #ffe17a, #c28f06); color: #3a2a00; border-color: rgba(255,255,255,0.45); }
+.rc-card.jackpot .rc-badge {
+  background: linear-gradient(150deg, #ff8fc4, #b81f96);
+  color: #fff; border-color: rgba(255,255,255,0.5);
+  animation: rc-throb 0.9s ease-in-out infinite;
+}
+@keyframes rc-throb {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.09); }
+}
 
-/* The arithmetic, spelled out so the player can check it. */
-.result-sum {
+.rc-title {
+  position: relative; z-index: 1;
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--t3);
+}
+.rc-card.small   .rc-title { color: var(--green-hi); }
+.rc-card.big     .rc-title { color: var(--amber-hi); }
+.rc-card.huge    .rc-title { color: var(--gold); }
+.rc-card.jackpot .rc-title { color: #ff8fc4; font-size: 15px; letter-spacing: 0.2em; }
+
+.rc-amount {
+  position: relative; z-index: 1;
+  font-size: 38px;
+  font-weight: 800;
+  letter-spacing: -0.8px;
+  margin: 4px 0 2px;
+  font-variant-numeric: tabular-nums;
+  color: var(--t1);
+}
+.rc-card.loss    .rc-amount { color: var(--t3); font-size: 30px; }
+.rc-card.refund  .rc-amount { color: var(--gold); }
+.rc-card.small   .rc-amount { color: var(--green-hi); }
+.rc-card.big     .rc-amount { color: var(--amber-hi); text-shadow: 0 0 22px rgba(255, 138, 61, 0.5); }
+.rc-card.huge    .rc-amount { color: var(--gold); text-shadow: 0 0 26px rgba(255, 212, 71, 0.55); font-size: 42px; }
+.rc-card.jackpot .rc-amount { color: #fff; text-shadow: 0 0 30px rgba(255, 94, 168, 0.75); font-size: 44px; }
+
+/* The arithmetic, so a doubtful player can check us. */
+.rc-sum {
+  position: relative; z-index: 1;
   font-size: 12px;
   color: var(--t3);
   font-variant-numeric: tabular-nums;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
-.result-net {
+.rc-net {
+  position: relative; z-index: 1;
   font-size: 14px;
   font-weight: 700;
-  padding-top: 10px;
+  padding-top: 11px;
   border-top: 1px solid var(--border);
   font-variant-numeric: tabular-nums;
   color: var(--t2);
 }
-.result-net.pos { color: var(--green-hi); }
-.result-net.neg { color: var(--t3); }
+.rc-net.pos { color: var(--green-hi); }
+.rc-net.neg { color: var(--t3); }
+
+/* ── confetti ───────────────────────────────────────────────────────────── */
+
+.rc-confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 2;
+}
+.rc-confetti i {
+  position: absolute;
+  top: -8%;
+  animation-name: rc-fall;
+  animation-timing-function: cubic-bezier(0.35, 0.1, 0.7, 1);
+  animation-fill-mode: forwards;
+  will-change: transform, opacity;
+}
+@keyframes rc-fall {
+  0%   { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 1; }
+  85%  { opacity: 1; }
+  100% { transform: translate3d(var(--drift), 112vh, 0) rotate(var(--spin)); opacity: 0; }
+}
 
 /* ── offline banner ─────────────────────────────────────────────────────── */
 
