@@ -39,6 +39,9 @@ func NewRouter(d Deps) *chi.Mux {
 	r.Use(WithRealIP(d.Cfg.TrustedProxyCIDRs))
 	r.Use(Recover)
 	r.Use(LogRequests)
+	// The web front end is deployed as its own origin, so the API must opt it
+	// in explicitly. Sits after Recover/Log so preflights are still logged.
+	r.Use(CORS(d.Cfg.CORSOrigins))
 
 	// Liveness. Zero dependencies, on purpose: this must not fail because
 	// Postgres hiccuped, or a supervisor will restart a perfectly healthy

@@ -24,6 +24,7 @@ type Config struct {
 	LogLevel          string
 	LogFormat         string
 	TrustedProxyCIDRs []*net.IPNet
+	CORSOrigins       []string
 
 	// postgres
 	DatabaseURL   string
@@ -210,6 +211,21 @@ func (l *loader) cidrs(key, def string) []*net.IPNet {
 	return out
 }
 
+// csv reads a comma-separated list.
+func (l *loader) csv(key, def string) []string {
+	raw := l.str(key, def)
+	if raw == "" {
+		return nil
+	}
+	var out []string
+	for _, p := range strings.Split(raw, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 func (l *loader) urlish(key, def string) string {
 	v := l.str(key, def)
 	if v == "" {
@@ -236,6 +252,8 @@ func Load() (*Config, error) {
 	c.LogLevel = l.oneOf("LOG_LEVEL", "info", "debug", "info", "warn", "error")
 	c.LogFormat = l.oneOf("LOG_FORMAT", "json", "json", "text")
 	c.TrustedProxyCIDRs = l.cidrs("TRUSTED_PROXY_CIDRS", "127.0.0.1/32,::1/128")
+	// Exact-match allowlist for the web front end's origin. No wildcards.
+	c.CORSOrigins = l.csv("CORS_ORIGINS", "http://localhost:5173")
 
 	// ── postgres ───────────────────────────────────────────────────────────
 	c.DatabaseURL = l.req("DATABASE_URL")
@@ -352,6 +370,11 @@ func Load() (*Config, error) {
 		}
 		if strings.HasPrefix(c.BaseURL, "http://") {
 			l.bad("BASE_URL", "must be https in production")
+		}
+		for _, o := range c.CORSOrigins {
+			if strings.HasPrefix(o, "http://") || strings.Contains(o, "localhost") {
+				l.bad("CORS_ORIGINS", "contains a non-https or localhost origin ("+o+") in production")
+			}
 		}
 	}
 
