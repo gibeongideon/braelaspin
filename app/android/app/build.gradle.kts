@@ -19,7 +19,7 @@ android {
         applicationId = "com.dibon.braelaspin"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        minSdk = flutter.minSdkVersion  // Android 6.0 — the floor for the cheap handsets this targets
         targetSdk = flutter.targetSdkVersion
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
@@ -31,9 +31,17 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // TODO: replace with a real upload key before distribution.
             signingConfig = signingConfigs.getByName("debug")
+            // R8 + resource shrinking. Worth ~30% of the APK, and it only runs
+            // in release — which is why every device test must be a release
+            // build, or breakage here is invisible until users see it.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }

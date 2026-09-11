@@ -19,8 +19,8 @@
 | **W1** | **Web scaffold (TypeScript)** | **✅ complete** |
 | **W2** | **Web polish + payout accuracy** | **✅ complete** (deposit/withdraw still blocked on M6/M7) |
 | **W3** | **Production deploy + CI/CD** | **✅ live** at https://braelaspin.dafeapp.com |
-| M3 | Wheel widget (Flutter) | ⬜ not started |
-| M4 | Spin engine + app shell | 🔨 **HTTP handlers done**; Flutter UI pending |
+| **M3** | **Wheel widget (Flutter)** | **✅ complete** |
+| **M4** | **Spin engine + Flutter app** | **✅ complete** — full app, all screens |
 | M5 | Real money, referrals, history | ⬜ not started |
 | M6 | M-Pesa deposits | 🚫 blocked on Daraja credentials |
 | M7 | M-Pesa withdrawals | 🚫 blocked on Daraja credentials |
@@ -433,7 +433,68 @@ payout identity itself.
 
 ---
 
-## ⬜ M3 — Wheel widget (Flutter, offline)
+## ✅ M3 + M4 — The Flutter app (COMPLETE)
+
+> The payoff for building web-first. `core/` ported to Dart essentially line
+> for line, and the **same 38 assertions** now run on both clients.
+
+### The port — `app/lib/core/`, zero pub dependencies
+| Web | Flutter | |
+|---|---|---|
+| `types.ts` | `models.dart` | |
+| `wheel.ts` | `spin_math.dart` | identical maths, identical tests |
+| `store.ts` | `store.dart` | `Signal<T>` → `ValueNotifier<T>` |
+| `outcome.ts` | `outcome.dart` | |
+| `stakes.ts` | `stakes.dart` | |
+| `celebration.ts` | `celebration.dart` | |
+| `errors.ts` | `errors.dart` | every player-facing string, one file |
+| `api.ts` | `api.dart` | `dart:io` HttpClient — no `package:http` |
+
+- [x] **Zero runtime dependencies.** `dart:io` for HTTP, `dart:convert` for JSON,
+      `ValueNotifier` for state, `CustomPainter` for the wheel. Every package
+      costs bytes a Kenyan user pays for on a metered connection.
+- [x] `uses-material-design: false` — no icon font, no Material theme
+- [x] 38 Dart tests mirroring the TypeScript suite, all passing
+
+### The wheel — `app/lib/ui/wheel/`
+- [x] `wheel_painter.dart` — the static face recorded ONCE into a `ui.Picture`;
+      each frame is **one canvas rotate plus one drawPicture**. Repainting 12
+      arcs and 12 text layouts per frame is what makes wheels stutter on the
+      hardware this targets.
+- [x] Geometry comes from `core/spin_math.dart`, never computed in the painter —
+      the exact mistake that made the web pointer off-by-one
+- [x] Fixed light source: bezel and gloss painted AFTER the rotation, so
+      highlights stay put while the wheel turns underneath
+- [x] Labels flip in the lower half so none are upside down
+- [x] Losing tiles alternate two dark shades so all 12 stay visible
+- [x] Metallic pegs on the wheel, sweeping past a fixed flapper
+- [x] Overshoot-and-settle, bounded so the pointer cannot leave the winning tile
+- [x] `AnimatedBuilder` scoped to the canvas: a spin rebuilds **no widgets**
+- [x] Reduced-motion honoured via `MediaQuery.disableAnimations`
+- [x] Debug `assert` that the landed segment equals the server's
+
+### Screens
+- [x] Auth (live phone normalisation echo), Spin, Wallet, Results, History,
+      Invite, Profile
+- [x] Five-tab shell with the raised centre action, matching the web client
+- [x] Stepper + chip ladder — **no text input**, so no keyboard covers the wheel
+- [x] Two-phase balance: bet leaves on tap, payout lands when the wheel stops
+- [x] Tiered result card: rays, counting number, confetti, rising chime
+- [x] `refreshMe()` on app resume — the API is the source of truth
+- [x] Haptics on tap, selection and win
+
+### Native — `android/app/src/main/kotlin/`
+- [x] `MainActivity.kt` — tones synthesised with `AudioTrack` (sine + decay
+      envelope). No audio package, no asset files.
+- [x] Ticks **throttled to ~14/sec**; the raw 24/sec peak sounds like noise
+- [x] `SecureStore.kt` — refresh token in **AES-GCM encrypted SharedPreferences
+      with an Android Keystore key**, written against platform APIs so the
+      zero-dependency footprint holds. The access token is never persisted.
+- [x] `minSdk 23`, R8 + `shrinkResources`, ProGuard keeps for the channels
+
+---
+
+## ⬜ M3-original — Wheel widget checklist (superseded, kept for reference)
 
 - [ ] `wheel_spec.dart` — segment fills/labels; **multipliers come from the API**, never hardcoded
 - [ ] `wheel_face.dart` — record the static face once into a `ui.Picture`
