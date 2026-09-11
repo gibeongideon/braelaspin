@@ -1,0 +1,26 @@
+name: braelaspin
+description: Spin the wheel. Win up to 200x.
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.0
+
+# ZERO runtime dependencies, deliberately.
+#
+# The APK budget is 10MB per ABI and the whole product is five screens, an
+# HTTP client and a CustomPainter. dart:io gives us HTTP, dart:convert gives
+# us JSON, ValueNotifier gives us state, and CustomPainter gives us the wheel.
+# Every package added here costs bytes a Kenyan user pays for on a metered
+# connection, so each one needs to earn its place.
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: false
