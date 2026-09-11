@@ -1,0 +1,29 @@
+.env
+*.env
+!.env.example
+
+# build output
+/bin/
+/build/
+braelaspin
+
+# secrets
+key.properties
+*.jks
+*.keystore
+*.cer
+!mpesa_sandbox.cer
+
+# flutter
+app/.dart_tool/
+app/build/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/android/.gradle/
+app/android/local.properties
+app/android/app/src/main/res/raw/tick.mp3.bak
+
+# editors
+.idea/
+.vscode/
+*.swp

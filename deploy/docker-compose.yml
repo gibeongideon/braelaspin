@@ -1,0 +1,47 @@
+name: braelaspin
+
+# Ports are deliberately non-default: this machine already has a system
+# Postgres and Redis, and colliding with them produces confusing failures.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: braelaspin
+      POSTGRES_USER: braelaspin
+      POSTGRES_PASSWORD: devpassword
+    ports: ["5433:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    command:
+      - postgres
+      - -c
+      - log_min_duration_statement=200
+      - -c
+      - max_connections=100
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U braelaspin -d braelaspin"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6380:6379"]
+    command:
+      - redis-server
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - 256mb
+      # noeviction, deliberately: silently evicting a refresh token logs a user
+      # out, and silently evicting an idempotency key can double-charge a bet.
+      # Failing loudly is the safer mode for both.
+      - --maxmemory-policy
+      - noeviction
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
