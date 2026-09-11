@@ -264,10 +264,55 @@ button { cursor: pointer; border: 0; background: none; }
 .hint { font-size: 12px; color: var(--t3); margin-top: 5px; }
 .hint.err { color: var(--red); }
 
-/* stake chips */
-.chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+/* ── the bet control ──────────────────────────────────────────────────────
+   Selection only: steppers walk the ladder, chips jump to a rung. No text
+   input, so no keyboard ever covers the wheel and no typo can reach a bet. */
+
+.bet-card { padding: 14px; }
+
+.stepper {
+  display: grid;
+  grid-template-columns: 54px 1fr 54px;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 12px;
+}
+
+.step {
+  height: 54px;
+  border-radius: var(--r);
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
+  color: var(--t1);
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  transition: background 0.15s, transform 0.1s;
+  /* 54px square: comfortably above the 44px minimum touch target, and the
+     two are far enough apart to be hard to mis-tap mid-game. */
+}
+.step:hover:not(:disabled) { background: rgba(255, 255, 255, 0.12); }
+.step:active:not(:disabled) { transform: scale(0.94); }
+.step:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.stake-value {
+  text-align: center;
+  font-size: 27px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  /* tabular-nums so stepping through amounts does not shift the layout */
+  font-variant-numeric: tabular-nums;
+}
+
+.chips {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
 .chip {
-  padding: 8px 13px;
+  padding: 9px 0;
   border-radius: var(--r-pill);
   background: var(--surface);
   border: 1px solid var(--border);
@@ -275,15 +320,37 @@ button { cursor: pointer; border: 0; background: none; }
   font-weight: 700;
   color: var(--t2);
   font-variant-numeric: tabular-nums;
+  transition: background 0.15s, color 0.15s;
 }
-.chip:hover { background: var(--surface-2); color: var(--t1); }
+.chip:hover:not(:disabled) { background: var(--surface-2); color: var(--t1); }
+.chip:disabled { opacity: 0.32; cursor: not-allowed; }
 .chip[aria-pressed="true"] {
   background: linear-gradient(135deg, var(--amber-hi), var(--amber-lo));
   border-color: transparent;
   color: #fff;
 }
 
-/* real/demo toggle */
+.limit-hint {
+  font-size: 12px;
+  color: var(--t3);
+  text-align: center;
+  margin: 10px 0 0;
+  min-height: 1em;  /* reserve the line so the button never jumps */
+}
+
+.bet-card .btn-primary { margin-top: 12px; }
+
+.eye {
+  background: none;
+  border: 0;
+  color: var(--t3);
+  font-size: 13px;
+  padding: 0 0 0 2px;
+  line-height: 1;
+}
+.eye:hover { color: var(--t1); }
+
+/* real/demo toggle *//* real/demo toggle */
 .mode {
   display: flex;
   gap: 4px;

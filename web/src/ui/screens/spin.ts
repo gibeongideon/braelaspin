@@ -1,20 +1,28 @@
 /**
  * The spin screen — the product.
  *
- * Layout follows the reference: balance pill, headline, wheel with a fixed
- * pointer, a winners strip, and a full-width amber CTA.
+ * Deliberately spare. Everything on it is either the wheel, the bet, or the
+ * action; anything a player does not need mid-spin lives one tap away:
+ *
+ *   - no free-text amount field. Betting is selection (see core/stakes.ts):
+ *     steppers walk a fixed ladder and chips jump to a rung, so every
+ *     reachable amount is one we chose and no keyboard ever covers the wheel.
+ *   - no balance breakdown. The pill shows the balance in play; Practice /
+ *     Real / Withdrawable belong to the Wallet tab, and rendering "REAL KES 0"
+ *     under a practice game is noise.
+ *   - no headline. The wheel displays 200x in bright pink; saying it again in
+ *     words costs a third of the first screen.
  */
 
 import { h, mount, Scope } from '../dom';
 import { toast } from '../toast';
 import { WheelView, Ticker } from '../wheel-view';
-import { formatKes, parseShillings } from '../../core/money';
+import { formatKes } from '../../core/money';
+import { STAKE_LADDER, stepUp, stepDown, defaultStake } from '../../core/stakes';
 import { describeOutcome, PayoutMismatchError } from '../../core/outcome';
 import { showResult } from '../result-overlay';
 import { ApiError } from '../../core/errors';
 import type { Store } from '../../core/store';
-
-const CHIPS = [500, 1000, 2500, 5000, 10000, 50000]; // cents: 5, 10, 25, 50, 100, 500
 
 export function SpinScreen(store: Store, nav: (route: string) => void): {
   el: HTMLElement; scope: Scope;
@@ -31,37 +39,48 @@ export function SpinScreen(store: Store, nav: (route: string) => void): {
   const wheel = new WheelView(canvas, { onTick: () => ticker.tick() });
   scope.add(() => wheel.destroy());
 
-  const stakeInput = h('input', {
-    class: 'input num',
-    type: 'text',
-    inputmode: 'decimal',
-    'aria-label': 'Bet amount in shillings',
+  const minusBtn = h('button', {
+    class: 'step', type: 'button', 'aria-label': 'Lower the bet', text: '−',
+  });
+  const plusBtn = h('button', {
+    class: 'step', type: 'button', 'aria-label': 'Raise the bet', text: '+',
+  });
+  const stakeValue = h('div', {
+    class: 'stake-value num',
+    role: 'status',
+    'aria-live': 'polite',
+    'aria-label': 'Current bet',
   });
 
   const chipRow = h('div', { class: 'chips' });
   const spinBtn = h('button', { class: 'btn btn-primary', type: 'button' });
   const modeRow = h('div', { class: 'mode', role: 'group', 'aria-label': 'Play mode' });
-  const statsRow = h('div', { class: 'stats' });
   const balanceEl = h('span', { class: 'num' });
-  const spinsHint = h('p', { class: 'spins-left' });
+  const limitHint = h('p', { class: 'limit-hint' });
 
   // ── reactive wiring ────────────────────────────────────────────────────
 
   scope.add(store.config.subscribe((cfg) => {
     if (cfg.segments.length) wheel.setSegments(cfg.segments);
-    renderChips();
+    renderStake();
   }));
+  scope.add(store.balances.subscribe(() => { renderBalance(); renderStake(); }));
+  scope.add(store.hideBalance.subscribe(renderBalance));
+  scope.add(store.realMode.subscribe(() => {
+    renderMode();
+    renderBalance();
+    // Switching mode changes the ceiling, so re-seat the stake on a rung that
+    // is actually affordable.
+    store.stake.value = store.clampStake(store.stake.value) || defaultStake(store.maxStake());
+    renderStake();
+  }));
+  scope.add(store.stake.subscribe(renderStake));
 
-  scope.add(store.balances.subscribe(() => { renderBalance(); renderStats(); renderChips(); }));
-  scope.add(store.hideBalance.subscribe(() => renderBalance()));
-  scope.add(store.realMode.subscribe(() => { renderMode(); renderBalance(); renderStats(); renderChips(); }));
-  scope.add(store.stake.subscribe((c) => {
-    if (document.activeElement !== stakeInput) stakeInput.value = String(c / 100);
-    renderChips();
-  }));
   scope.add(store.spin.subscribe((phase) => {
     const busy = phase.t === 'requesting' || phase.t === 'spinning' || phase.t === 'checking';
-    spinBtn.disabled = busy;
+    spinBtn.disabled = busy || store.maxStake() < store.config.value.min_stake_cents;
+    minusBtn.disabled = busy || stepDown(store.stake.value) === null;
+    plusBtn.disabled = busy || stepUp(store.stake.value, store.maxStake()) === null;
     mount(spinBtn,
       busy ? h('span', { class: 'spinner' }) : null,
       phase.t === 'checking' ? 'Checking your spin…'
@@ -72,35 +91,20 @@ export function SpinScreen(store: Store, nav: (route: string) => void): {
   }));
 
   function renderBalance() {
-    const hidden = store.hideBalance.value;
-    balanceEl.textContent = hidden ? '••••' : formatKes(store.activeBalance, { symbol: false });
-  }
-
-  function renderStats() {
-    const b = store.balances.value;
-    mount(statsRow,
-      stat('Practice', formatKes(b.demo_cents)),
-      stat('Real', formatKes(b.real_cents)),
-      stat('Withdrawable', formatKes(b.withdrawable_cents)),
-    );
-  }
-
-  function stat(k: string, v: string) {
-    return h('div', { class: 'stat' },
-      h('div', { class: 'k', text: k }),
-      h('div', { class: 'v', text: v }),
-    );
+    balanceEl.textContent = store.hideBalance.value
+      ? '••••'
+      : formatKes(store.activeBalance, { symbol: false });
   }
 
   function renderMode() {
     const real = store.realMode.value;
     mount(modeRow,
       h('button', {
-        text: '🎮 Practice', 'aria-pressed': String(!real), type: 'button',
+        text: '🎮 Practice', type: 'button', 'aria-pressed': String(!real),
         onClick: () => { store.realMode.value = false; },
       }),
       h('button', {
-        class: 'real', text: '💵 Real money', 'aria-pressed': String(real), type: 'button',
+        class: 'real', text: '💵 Real money', type: 'button', 'aria-pressed': String(real),
         onClick: () => {
           if (store.balances.value.real_cents <= 0) {
             toast('Deposit first to play with real money.', {
@@ -115,39 +119,43 @@ export function SpinScreen(store: Store, nav: (route: string) => void): {
     );
   }
 
-  function renderChips() {
-    const cfg = store.config.value;
-    const balance = store.activeBalance;
-    mount(chipRow, ...CHIPS.map((c) => {
-      const affordable = c <= balance && c >= cfg.min_stake_cents;
-      return h('button', {
+  function renderStake() {
+    const stake = store.stake.value;
+    const ceiling = store.maxStake();
+    const min = store.config.value.min_stake_cents;
+
+    stakeValue.textContent = formatKes(stake);
+    minusBtn.disabled = stepDown(stake) === null;
+    plusBtn.disabled = stepUp(stake, ceiling) === null;
+
+    mount(chipRow, ...STAKE_LADDER.map((c) =>
+      h('button', {
         class: 'chip',
         type: 'button',
         text: formatKes(c, { symbol: false }),
-        'aria-pressed': String(store.stake.value === c),
-        disabled: !affordable,
-        title: affordable ? undefined : 'More than your balance',
-        onClick: () => { store.stake.value = store.clampStake(c); },
-      });
-    }));
+        'aria-pressed': String(stake === c),
+        disabled: c > ceiling,
+        title: c > ceiling ? 'More than you can bet right now' : undefined,
+        onClick: () => { store.stake.value = c; },
+      }),
+    ));
 
-    // One source of truth for the ceiling, shared with clampStake, so the
-    // number shown is the number the server would accept.
-    const max = store.maxStake();
-    spinsHint.textContent = !store.realMode.value
-      ? 'Practice mode — no real money at stake.'
-      : max >= cfg.min_stake_cents
-        ? `Max bet right now: ${formatKes(max)}`
-        : 'Real-money play is unavailable right now — try practice mode.';
+    // Only say something when it is not obvious. In practice mode the ceiling
+    // is the player's own free balance and needs no commentary.
+    limitHint.textContent = !store.realMode.value
+      ? ''
+      : ceiling < min
+        ? 'Real-money play is unavailable right now.'
+        : `Max bet ${formatKes(ceiling)}`;
   }
 
-  stakeInput.addEventListener('input', () => {
-    const cents = parseShillings(stakeInput.value);
-    if (cents !== null) store.stake.value = cents;
+  minusBtn.addEventListener('click', () => {
+    const next = stepDown(store.stake.value);
+    if (next !== null) store.stake.value = next;
   });
-  stakeInput.addEventListener('blur', () => {
-    store.stake.value = store.clampStake(store.stake.value);
-    stakeInput.value = String(store.stake.value / 100);
+  plusBtn.addEventListener('click', () => {
+    const next = stepUp(store.stake.value, store.maxStake());
+    if (next !== null) store.stake.value = next;
   });
 
   // ── the spin itself ────────────────────────────────────────────────────
@@ -170,9 +178,8 @@ export function SpinScreen(store: Store, nav: (route: string) => void): {
       // arithmetic bug and the player must not be shown a number we cannot
       // stand behind.
       try {
-        const outcome = describeOutcome(
-          result.stake_cents, result.multiplier_bp, result.payout_cents);
-        showResult(outcome);
+        showResult(describeOutcome(
+          result.stake_cents, result.multiplier_bp, result.payout_cents));
       } catch (err) {
         if (err instanceof PayoutMismatchError) {
           console.error(err);
@@ -201,16 +208,13 @@ export function SpinScreen(store: Store, nav: (route: string) => void): {
     }
   });
 
-
-
   const onResize = () => wheel.resize();
   window.addEventListener('resize', onResize);
   scope.add(() => window.removeEventListener('resize', onResize));
 
   renderMode();
   renderBalance();
-  renderStats();
-  renderChips();
+  renderStake();
   queueMicrotask(() => wheel.resize());
 
   const el = h('div', { class: 'screen' },
@@ -223,7 +227,7 @@ export function SpinScreen(store: Store, nav: (route: string) => void): {
         h('span', { class: 'coin' }),
         balanceEl,
         h('button', {
-          class: 'icon-btn', style: 'width:22px;height:22px;border:0;background:none',
+          class: 'eye',
           'aria-label': 'Toggle balance visibility',
           text: '👁',
           onClick: () => { store.hideBalance.value = !store.hideBalance.value; },
@@ -231,36 +235,25 @@ export function SpinScreen(store: Store, nav: (route: string) => void): {
       ),
     ),
 
-    h('p', { class: 'headline' }, 'Spin to win up to ', h('em', { text: '200x' }), ' your stake'),
-
     wheelWrap,
-    spinsHint,
     winnersStrip(store),
 
-    h('div', { class: 'card' },
+    h('div', { class: 'card bet-card' },
       modeRow,
-      h('div', { class: 'field', style: 'margin:14px 0 0' },
-        h('label', { for: 'stake', text: 'Bet amount (KES)' }),
-        stakeInput,
-      ),
+      h('div', { class: 'stepper' }, minusBtn, stakeValue, plusBtn),
       chipRow,
-      h('div', { style: 'height:14px' }),
+      limitHint,
       spinBtn,
     ),
-
-    statsRow,
   );
 
   return { el, scope };
 }
 
 /**
- * Recent winners — real data, real-money wins only.
- *
- * Players are shown as masked phone numbers, which is what the server sends;
- * the full number never leaves it. Renders nothing at all when there are no
- * wins yet, rather than inventing names: fake social proof on a gambling site
- * is a lie about other people's money.
+ * Recent winners — real wins only, real money only, phones masked.
+ * Renders nothing when there are none, rather than inventing names: fake
+ * social proof on a gambling site is a lie about other people's money.
  */
 function winnersStrip(store: Store): HTMLElement {
   const el = h('div', { class: 'winners', 'aria-label': 'Recent winners' });
@@ -268,10 +261,7 @@ function winnersStrip(store: Store): HTMLElement {
   store.api
     .get<{ items: { name: string; payout_cents: number }[] }>('/v1/game/winners')
     .then(({ items }) => {
-      if (!items?.length) {
-        el.remove();
-        return;
-      }
+      if (!items?.length) { el.remove(); return; }
       mount(el, ...items.map((wn) =>
         h('div', { class: 'winner' },
           h('span', { class: 'av', text: '👤' }),
