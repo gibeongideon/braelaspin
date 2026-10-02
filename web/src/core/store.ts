@@ -13,6 +13,7 @@
 import { Signal } from './signal';
 import { Api, newClientRef, type TokenStore } from './api';
 import { balanceAfterStake } from './outcome';
+import { MemoryPrefs, PREF_SOUND, type PrefsStore } from './prefs';
 import { ApiError } from './errors';
 import type {
   Balances, GameConfig, Me, ReferralStats, Session,
@@ -47,6 +48,15 @@ export class Store {
   readonly referrals = new Signal<ReferralStats>({ count: 0, earned_cents: 0, last_30_cents: 0 });
 
   readonly stake = new Signal<Cents>(1000); // KES 10
+
+  /**
+   * Whether the wheel ticks and win chimes play.
+   *
+   * Lives here rather than inside the Ticker so that EVERY sound path reads
+   * one value — the win chime used to be a free function that ignored the
+   * Ticker's own flag, which meant a "muted" app still played fanfares.
+   */
+  readonly soundEnabled = new Signal<boolean>(true);
   readonly realMode = new Signal<boolean>(false);
   readonly hideBalance = new Signal<boolean>(false);
   readonly spin = new Signal<SpinPhase>({ t: 'idle' });
@@ -55,10 +65,22 @@ export class Store {
 
   readonly api: Api;
   #tokens: TokenStore;
+  #prefs: PrefsStore;
 
-  constructor(api: Api, tokens: TokenStore) {
+  constructor(api: Api, tokens: TokenStore, prefs: PrefsStore = new MemoryPrefs()) {
     this.api = api;
     this.#tokens = tokens;
+    this.#prefs = prefs;
+
+    // Restore the muted state before the first frame, so a muted device never
+    // plays a tick on launch.
+    const saved = this.#prefs.getBool(PREF_SOUND);
+    if (saved !== null) this.soundEnabled.value = saved;
+    this.soundEnabled.subscribe((on) => this.#prefs.setBool(PREF_SOUND, on), false);
+  }
+
+  toggleSound(): void {
+    this.soundEnabled.value = !this.soundEnabled.value;
   }
 
   /** The balance the active mode spends from. */

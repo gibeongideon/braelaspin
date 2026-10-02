@@ -20,7 +20,11 @@ import { formatKes } from '../core/money';
 import { multiplierTimes, type Outcome } from '../core/outcome';
 import { celebrationFor, confettiColours } from '../core/celebration';
 
-export function showResult(outcome: Outcome, onDismiss?: () => void): void {
+export function showResult(
+  outcome: Outcome,
+  opts: { soundOn?: boolean; onDismiss?: () => void } = {},
+): void {
+  const onDismiss = opts.onDismiss;
   const { kind, payoutCents, netCents, multiplierBp, stakeCents } = outcome;
   const times = multiplierTimes(multiplierBp);
   const party = celebrationFor(kind, multiplierBp);
@@ -67,7 +71,9 @@ export function showResult(outcome: Outcome, onDismiss?: () => void): void {
   if (party.confetti > 0 && !reduced) {
     overlay.append(confetti(party.confetti, confettiColours(party.tier)));
   }
-  if (party.chime.length > 0) chime(party.chime);
+  // The win chime used to ignore the mute entirely — a 'muted' app still
+  // played fanfares. It now reads the same single setting as the ticks.
+  if (party.chime.length > 0 && opts.soundOn !== false) chime(party.chime);
 
   let closed = false;
   const close = () => {

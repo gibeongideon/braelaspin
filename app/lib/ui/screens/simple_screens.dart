@@ -10,6 +10,7 @@ import 'package:flutter/widgets.dart';
 import '../../core/errors.dart';
 import '../../core/models.dart';
 import '../../core/money.dart';
+import '../../core/share.dart';
 import '../../core/store.dart';
 import '../theme.dart';
 import '../widgets.dart' as w;
@@ -445,22 +446,18 @@ class InviteScreen extends StatelessWidget {
                     style: const TextStyle(fontSize: 13, color: T.t1),
                   ),
                 ),
-                const SizedBox(height: 12),
-                w.AppButton(
-                  label: '📋 Copy link',
-                  compact: true,
-                  primary: false,
-                  onPressed: user == null
-                      ? null
-                      : () async {
-                          await Clipboard.setData(
-                            ClipboardData(text: user.refLink),
-                          );
-                          if (context.mounted) {
-                            w.showToast(context, 'Link copied.');
-                          }
-                        },
-                ),
+                  const SizedBox(height: 14),
+                  if (user != null) _ShareGrid(refLink: user.refLink),
+                  const SizedBox(height: 12),
+                  w.AppButton(
+                    label: '↗ More sharing options',
+                    compact: true,
+                    onPressed: user == null
+                        ? null
+                        : () => _channel.invokeMethod<bool>('sheet', {
+                              'text': inviteText(user.refLink),
+                            }).catchError((_) => false),
+                  ),
                 const SizedBox(height: 10),
                 Text(
                   'Code: ${user?.refCode ?? '—'} · You earn 2% of every bet your friends place.',
@@ -507,6 +504,71 @@ class InviteScreen extends StatelessWidget {
     ),
   );
 }
+
+/// One tap per channel, plus the system sheet above for everything else.
+class _ShareGrid extends StatelessWidget {
+  const _ShareGrid({required this.refLink});
+  final String refLink;
+
+  @override
+  Widget build(BuildContext context) => GridView.count(
+    crossAxisCount: 3,
+    shrinkWrap: true,
+    physics: const NeverScrollableScrollPhysics(),
+    mainAxisSpacing: 8,
+    crossAxisSpacing: 8,
+    childAspectRatio: 1.6,
+    children: [
+      for (final c in kChannels)
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () async {
+            HapticFeedback.selectionClick();
+            if (c.id == Channel.copy) {
+              await Clipboard.setData(ClipboardData(text: inviteText(refLink)));
+              if (context.mounted) {
+                w.showToast(context, 'Invite copied — paste it anywhere.');
+              }
+              return;
+            }
+            final url = shareUrl(c.id, refLink);
+            if (url == null) return;
+            final ok = await _channel
+                .invokeMethod<bool>('open', {'url': url})
+                .catchError((_) => false);
+            // Saying nothing when the app is missing looks like a dead button.
+            if (ok != true && context.mounted) {
+              w.showToast(context, '${c.label} is not installed.', kind: 'warn');
+            }
+          },
+          child: Container(
+            decoration: BoxDecoration(
+              color: T.surface,
+              border: Border.all(color: T.border),
+              borderRadius: T.brR,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(c.glyph, style: const TextStyle(fontSize: 21)),
+                const SizedBox(height: 5),
+                Text(
+                  c.label,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: T.t2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+    ],
+  );
+}
+
+const MethodChannel _channel = MethodChannel('braelaspin/share');
 
 // ── Profile ─────────────────────────────────────────────────────────────────
 

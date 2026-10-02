@@ -3,6 +3,7 @@
 import { h, mount, Scope } from '../dom';
 import { toast } from '../toast';
 import { formatKes } from '../../core/money';
+import { CHANNELS, inviteText, shareUrl } from '../../core/share';
 import type { Store } from '../../core/store';
 
 export function ReferScreen(store: Store): { el: HTMLElement; scope: Scope } {
@@ -19,38 +20,49 @@ export function ReferScreen(store: Store): { el: HTMLElement; scope: Scope } {
     mount(codeBox,
       h('h2', { class: 'h2', text: 'Your referral link' }),
       h('div', { class: 'ref-box' }, u.ref_link),
-      h('div', { style: 'height:12px' }),
-      h('div', { class: 'btn-row' },
-        h('button', {
-          class: 'btn btn-ghost btn-sm', text: '📋 Copy',
-          onClick: async () => {
-            try {
-              await navigator.clipboard.writeText(u.ref_link);
-              toast('Link copied.', { kind: 'info' });
-            } catch {
-              toast('Could not copy — select the link and copy manually.', { kind: 'warn' });
-            }
-          },
-        }),
-        h('button', {
-          class: 'btn btn-primary btn-sm', text: '↗ Share',
-          onClick: async () => {
-            const text = `Spin and win on Braela! Use my link: ${u.ref_link}`;
-            // Web Share where available (mobile), clipboard elsewhere.
-            if (navigator.share) {
-              try { await navigator.share({ title: 'Braela Spin', text, url: u.ref_link }); }
-              catch { /* user dismissed the sheet */ }
-            } else {
-              try {
-                await navigator.clipboard.writeText(text);
-                toast('Invite copied — paste it anywhere.', { kind: 'info' });
-              } catch {
-                toast('Copy the link above to share.', { kind: 'warn' });
+      h('div', { style: 'height:14px' }),
+
+      // One tap per channel. WhatsApp first because it is how Kenya actually
+      // shares things. The native share sheet is offered too where the browser
+      // supports it, since it lists apps we cannot enumerate.
+      h('div', { class: 'share-grid' },
+        ...CHANNELS.map((c) =>
+          h('button', {
+            class: `share-btn ${c.id}`,
+            type: 'button',
+            'aria-label': `Share via ${c.label}`,
+            onClick: async () => {
+              if (c.id === 'copy') {
+                try {
+                  await navigator.clipboard.writeText(inviteText(u.ref_link));
+                  toast('Invite copied — paste it anywhere.', { kind: 'info' });
+                } catch {
+                  toast('Could not copy. Select the link above instead.', { kind: 'warn' });
+                }
+                return;
               }
-            }
+              const url = shareUrl(c.id, u.ref_link);
+              if (url) window.open(url, '_blank', 'noopener,noreferrer');
+            },
           },
-        }),
+            h('span', { class: 'g', 'aria-hidden': 'true', text: c.glyph }),
+            h('span', { text: c.label }),
+          ),
+        ),
       ),
+
+      navigator.share
+        ? h('button', {
+            class: 'btn btn-primary btn-sm', style: 'margin-top:12px',
+            text: '↗ More sharing options',
+            onClick: async () => {
+              try {
+                await navigator.share({ title: 'Braela Spin', text: inviteText(u.ref_link) });
+              } catch { /* user dismissed the sheet */ }
+            },
+          })
+        : null,
+
       h('p', { class: 'hint', style: 'margin-top:10px',
                text: `Code: ${u.ref_code} · You earn 2% of every bet your friends place.` }),
     );

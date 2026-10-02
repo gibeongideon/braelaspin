@@ -36,6 +36,7 @@ export function SpinScreen(store: Store, nav: (route: string) => void): {
     canvas,
   );
 
+  ticker.isEnabled = () => store.soundEnabled.value;
   const wheel = new WheelView(canvas, { onTick: () => ticker.tick() });
   scope.add(() => wheel.destroy());
 
@@ -178,8 +179,10 @@ export function SpinScreen(store: Store, nav: (route: string) => void): {
       // arithmetic bug and the player must not be shown a number we cannot
       // stand behind.
       try {
-        showResult(describeOutcome(
-          result.stake_cents, result.multiplier_bp, result.payout_cents));
+        showResult(
+          describeOutcome(result.stake_cents, result.multiplier_bp, result.payout_cents),
+          { soundOn: store.soundEnabled.value },
+        );
       } catch (err) {
         if (err instanceof PayoutMismatchError) {
           console.error(err);
@@ -233,6 +236,7 @@ export function SpinScreen(store: Store, nav: (route: string) => void): {
           onClick: () => { store.hideBalance.value = !store.hideBalance.value; },
         }),
       ),
+      muteButton(store),
     ),
 
     wheelWrap,
@@ -248,6 +252,19 @@ export function SpinScreen(store: Store, nav: (route: string) => void): {
   );
 
   return { el, scope };
+}
+
+/** Mute toggle, in the top bar where the sound is. */
+function muteButton(store: Store): HTMLElement {
+  const btn = h('button', { class: 'icon-btn', type: 'button' });
+  const paint = (on: boolean) => {
+    btn.textContent = on ? '🔊' : '🔇';
+    btn.setAttribute('aria-label', on ? 'Mute sound' : 'Unmute sound');
+    btn.setAttribute('aria-pressed', String(!on));
+  };
+  store.soundEnabled.subscribe(paint);
+  btn.addEventListener('click', () => store.toggleSound());
+  return btn;
 }
 
 /**

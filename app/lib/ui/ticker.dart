@@ -15,13 +15,16 @@ import 'package:flutter/services.dart';
 class Ticker {
   static const _channel = MethodChannel('braelaspin/sound');
 
-  bool enabled = true;
+  /// Read fresh on every tick rather than cached, so muting takes effect
+  /// mid-spin instead of at the next one.
+  bool Function() isEnabled = () => true;
+
   DateTime _last = DateTime.fromMillisecondsSinceEpoch(0);
 
   static const _minGap = Duration(milliseconds: 70); // ~14/sec ceiling
 
   void tick() {
-    if (!enabled) return;
+    if (!isEnabled()) return;
     final now = DateTime.now();
     if (now.difference(_last) < _minGap) return;
     _last = now;
@@ -34,7 +37,7 @@ class Ticker {
 
   /// A short rising arpeggio for a win.
   void chime(List<double> notes) {
-    if (!enabled || notes.isEmpty) return;
+    if (!isEnabled() || notes.isEmpty) return;
     _channel
         .invokeMethod<void>('chime', {
           'notes': notes,

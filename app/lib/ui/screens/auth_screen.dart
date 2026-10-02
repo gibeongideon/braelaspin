@@ -197,7 +197,7 @@ class _AuthScreenState extends State<AuthScreen> {
           ],
           const SizedBox(height: 18),
           const Text(
-            'New accounts get KES 5,000 in practice credit. 18+. Play responsibly.',
+            'New accounts get KES 10,000 in practice credit. 18+. Play responsibly.',
             style: T.hint,
             textAlign: TextAlign.center,
           ),

@@ -407,10 +407,15 @@ export class WheelView {
  */
 export class Ticker {
   #ctx: AudioContext | null = null;
-  enabled = true;
+
+  /**
+   * Read fresh on every tick rather than cached, so muting takes effect
+   * mid-spin instead of at the next one.
+   */
+  isEnabled: () => boolean = () => true;
 
   tick(): void {
-    if (!this.enabled) return;
+    if (!this.isEnabled()) return;
     try {
       this.#ctx ??= new AudioContext();
       const ctx = this.#ctx;

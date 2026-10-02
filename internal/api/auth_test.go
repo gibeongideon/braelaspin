@@ -59,7 +59,7 @@ func newEnv(t *testing.T) *env {
 		ArgonTime: 1, ArgonMemoryKiB: 8 << 10, ArgonThreads: 1,
 		RTPBP: 9000, RakeBP: 500, ReferralBP: 200,
 		MinStakeCents: 500, MaxStakeCents: 5_000_000,
-		DemoGrantCents: 500_000, DemoTopupCooldn: 24 * time.Hour,
+		DemoGrantCents: 1_000_000, DemoTopupCooldn: 24 * time.Hour,
 
 		// Rate limits relaxed for tests, EXCEPT login: every request here
 		// comes from 127.0.0.1 and so shares one IP bucket, which would
@@ -208,8 +208,8 @@ func TestRegisterCreatesAccountWalletAndDemoGrant(t *testing.T) {
 	if me.Status != http.StatusOK {
 		t.Fatalf("/me: status %d, body %s", me.Status, me.Raw)
 	}
-	if got := me.num("balances", "demo_cents"); got != 500_000 {
-		t.Errorf("demo_cents = %v, want 500000", got)
+	if got := me.num("balances", "demo_cents"); got != 1_000_000 {
+		t.Errorf("demo_cents = %v, want 1000000", got)
 	}
 	if got := me.num("balances", "real_cents"); got != 0 {
 		t.Errorf("real_cents = %v, want 0 — signup must not grant real money", got)
@@ -624,8 +624,8 @@ func TestDemoTopUpIsCappedAndRateLimitedByCooldown(t *testing.T) {
 	if r := e.do("POST", "/v1/wallet/demo/topup", nil, access); r.Status != http.StatusOK {
 		t.Fatalf("first top-up: %d %s", r.Status, r.Raw)
 	}
-	if got := e.do("GET", "/v1/wallet", nil, access).num("demo_cents"); got != 500_000 {
-		t.Errorf("demo_cents = %v after a no-op top-up, want 500000 (must not stack)", got)
+	if got := e.do("GET", "/v1/wallet", nil, access).num("demo_cents"); got != 1_000_000 {
+		t.Errorf("demo_cents = %v after a no-op top-up, want 1000000 (must not stack)", got)
 	}
 
 	r := e.do("POST", "/v1/wallet/demo/topup", nil, access)
@@ -664,7 +664,7 @@ func TestConcurrentDemoTopUpsClaimTheCooldownOnce(t *testing.T) {
 	if ok != 1 {
 		t.Errorf("%d concurrent top-ups succeeded, want exactly 1", ok)
 	}
-	if got := e.do("GET", "/v1/wallet", nil, access).num("demo_cents"); got != 500_000 {
-		t.Errorf("demo_cents = %v, want 500000 — top-ups must not stack", got)
+	if got := e.do("GET", "/v1/wallet", nil, access).num("demo_cents"); got != 1_000_000 {
+		t.Errorf("demo_cents = %v, want 1000000 — top-ups must not stack", got)
 	}
 }

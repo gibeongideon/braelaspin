@@ -280,7 +280,7 @@ func Load() (*Config, error) {
 	c.ReferralBP = l.bp("REFERRAL_BP", 200)
 	c.MinStakeCents = l.i64("MIN_STAKE_CENTS", 500)
 	c.MaxStakeCents = l.i64("MAX_STAKE_CENTS", 5_000_000)
-	c.DemoGrantCents = l.i64("DEMO_GRANT_CENTS", 500_000)
+	c.DemoGrantCents = l.i64("DEMO_GRANT_CENTS", 1_000_000)
 	c.DemoTopupCooldn = l.dur("DEMO_TOPUP_COOLDOWN", 24*time.Hour)
 
 	// ── withdrawals ────────────────────────────────────────────────────────

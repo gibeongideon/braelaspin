@@ -114,7 +114,7 @@ export function AuthScreen(store: Store): { el: HTMLElement; scope: Scope } {
     form,
     h('p', {
       class: 'hint center', style: 'margin-top:18px',
-      text: 'New accounts get KES 5,000 in practice credit. 18+. Play responsibly.',
+      text: 'New accounts get KES 10,000 in practice credit. 18+. Play responsibly.',
     }),
   );
 

@@ -15,6 +15,7 @@ import 'api.dart';
 import 'errors.dart';
 import 'models.dart';
 import 'outcome.dart';
+import 'prefs.dart';
 
 enum AuthState { unknown, signedOut, signedIn }
 
@@ -30,10 +31,22 @@ enum SpinPhase {
 }
 
 class Store {
-  Store(this.api, this.tokens);
+  Store(this.api, this.tokens, [PrefsStore? prefs])
+      : prefs = prefs ?? MemoryPrefs() {
+    // Restore the muted state before the first frame, so a muted device never
+    // plays a tick on launch.
+    final saved = this.prefs.getBool(kPrefSound);
+    if (saved != null) soundEnabled.value = saved;
+    soundEnabled.addListener(
+      () => this.prefs.setBool(kPrefSound, soundEnabled.value),
+    );
+  }
 
   final Api api;
   final TokenStore tokens;
+  final PrefsStore prefs;
+
+  void toggleSound() => soundEnabled.value = !soundEnabled.value;
 
   final auth = ValueNotifier<AuthState>(AuthState.unknown);
   final user = ValueNotifier<User?>(null);
@@ -42,6 +55,13 @@ class Store {
   final referrals = ValueNotifier<ReferralStats>(const ReferralStats());
 
   final stake = ValueNotifier<Cents>(1000); // KES 10
+
+  /// Whether the wheel ticks and win chimes play.
+  ///
+  /// Lives here rather than inside the Ticker so EVERY sound path reads one
+  /// value — on web the win chime once ignored the Ticker's own flag, so a
+  /// "muted" app still played fanfares.
+  final soundEnabled = ValueNotifier<bool>(true);
   final realMode = ValueNotifier<bool>(false);
   final hideBalance = ValueNotifier<bool>(false);
   final spin = ValueNotifier<SpinPhase>(SpinPhase.idle);

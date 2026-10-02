@@ -39,6 +39,14 @@ class _SpinScreenState extends State<SpinScreen> {
   Store get store => widget.store;
 
   @override
+  void initState() {
+    super.initState();
+    // Read fresh on each tick so muting takes effect mid-spin.
+    _ticker.isEnabled = () => store.soundEnabled.value;
+    _loadWinners();
+  }
+
+  @override
   void dispose() {
     _wheel.dispose();
     _ticker.dispose();
@@ -120,7 +128,9 @@ class _SpinScreenState extends State<SpinScreen> {
           _topBar(),
           const SizedBox(height: 14),
           _wheelStack(),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          _winnersStrip(),
+          const SizedBox(height: 10),
           _betCard(),
         ],
       ),
@@ -255,6 +265,65 @@ class _SpinScreenState extends State<SpinScreen> {
       );
     },
   );
+
+  /// Recent winners — real wins only, real money only, phones masked by the
+  /// server. Renders nothing when there are none rather than inventing names:
+  /// fake social proof on a gambling app is a lie about other people's money.
+  Widget _winnersStrip() {
+    if (_winners.isEmpty) return const SizedBox.shrink();
+    return SizedBox(
+      height: 38,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _winners.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final wn = _winners[i];
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+            decoration: BoxDecoration(
+              color: T.surface,
+              border: Border.all(color: T.border),
+              borderRadius: T.brPill,
+            ),
+            child: Row(
+              children: [
+                const Text('👤', style: TextStyle(fontSize: 11)),
+                const SizedBox(width: 6),
+                Text(wn.$1, style: const TextStyle(fontSize: 12, color: T.t2)),
+                const SizedBox(width: 7),
+                Text(
+                  formatKes(wn.$2, symbol: false),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: T.greenHi,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  List<(String, int)> _winners = const [];
+
+  Future<void> _loadWinners() async {
+    try {
+      final j = await store.api.get<Map<String, dynamic>>('/v1/game/winners');
+      final items = ((j['items'] as List?) ?? [])
+          .map((w) => (
+                (w as Map<String, dynamic>)['name'] as String? ?? '',
+                w['payout_cents'] as int? ?? 0,
+              ))
+          .toList();
+      if (mounted) setState(() => _winners = items);
+    } catch (_) {
+      // Decoration; never surface an error for it.
+    }
+  }
 
   Widget _betCard() => Card(
     padding: const EdgeInsets.all(14),
