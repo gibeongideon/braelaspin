@@ -67,6 +67,8 @@ const Map<String, String> _copy = {
   'stake_exceeds_bankroll':
       'That bet is too large right now. Try a smaller amount.',
   'spin_in_flight': 'That spin is still being processed. Please wait a moment.',
+  // A retry after a flaky connection, not a mistake.
+  'duplicate_spin': 'That spin already went through — check your results.',
   // money
   'withdrawal_already_pending': 'You already have a withdrawal in progress.',
   'demo_topup_not_eligible': 'You can top up your practice balance once a day.',

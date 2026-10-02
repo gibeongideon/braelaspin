@@ -68,6 +68,11 @@ const COPY: Record<string, string> = {
   stake_too_small: 'That bet is below the minimum.',
   stake_too_large: 'That bet is above the maximum.',
   insufficient_funds: "You don't have enough for that bet.",
+  // Both of these mean "we already have this spin" — a retry after a flaky
+  // connection, not a mistake. Say so, rather than falling through to the
+  // generic "that didn't look right".
+  duplicate_spin: 'That spin already went through — check your results.',
+  spin_in_flight: 'That spin is still being processed. Please wait a moment.',
   stake_exceeds_bankroll: 'That bet is too large right now. Try a smaller amount.',
   no_pending_spin: 'Place a bet to spin.',
 

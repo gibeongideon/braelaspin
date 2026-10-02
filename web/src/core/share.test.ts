@@ -64,3 +64,43 @@ describe('referral sharing', () => {
     }
   });
 });
+
+// ── every server error code must have player-facing copy ───────────────────
+//
+// The server sends terse stable codes and the client owns the words. A code
+// with no entry falls through to a generic message, which is how a player
+// retrying after a dropped connection gets told "that didn't look right"
+// instead of "that spin already went through".
+describe('error copy covers every code the server can emit', () => {
+  // Kept in step with internal/api/*.go by hand; the list is short and a
+  // missing entry is exactly what this test exists to catch.
+  const SERVER_CODES = [
+    'invalid_phone', 'phone_taken', 'password_too_short', 'password_too_long',
+    'unknown_referral_code', 'invalid_credentials', 'account_suspended',
+    'token_reused', 'unauthorized', 'forbidden', 'not_found', 'bad_request',
+    'rate_limited', 'internal', 'stake_too_small', 'stake_too_large',
+    'insufficient_funds', 'stake_exceeds_bankroll', 'duplicate_spin',
+    'spin_in_flight', 'demo_topup_not_eligible',
+  ];
+
+  // These two ARE the generic messages by design — `bad_request` and
+  // `internal` say exactly what the kind-level fallback says, so comparing
+  // them against it proves nothing.
+  const INTENTIONALLY_GENERIC = new Set(['bad_request', 'internal']);
+
+  it('has specific copy for each — never the generic fallback', async () => {
+    const { userMessageFor } = await import('./errors');
+    const generic = userMessageFor('a_code_that_does_not_exist', {}, 'client');
+    for (const code of SERVER_CODES) {
+      if (INTENTIONALLY_GENERIC.has(code)) continue;
+      expect(userMessageFor(code), `no copy for "${code}"`).not.toBe(generic);
+    }
+  });
+
+  it('the intentionally-generic codes still resolve to something', async () => {
+    const { userMessageFor } = await import('./errors');
+    for (const code of INTENTIONALLY_GENERIC) {
+      expect(userMessageFor(code).length).toBeGreaterThan(10);
+    }
+  });
+});
