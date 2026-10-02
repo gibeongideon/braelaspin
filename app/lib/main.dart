@@ -48,7 +48,9 @@ class KeystoreTokens implements TokenStore {
 
   Future<void> load() async {
     try {
-      _refresh = await _channel.invokeMethod<String>('read', {'key': _refreshKey});
+      _refresh = await _channel.invokeMethod<String>('read', {
+        'key': _refreshKey,
+      });
     } catch (_) {
       _refresh = null;
     }
@@ -59,7 +61,10 @@ class KeystoreTokens implements TokenStore {
     _access = access;
     _refresh = refresh;
     try {
-      await _channel.invokeMethod<void>('write', {'key': _refreshKey, 'value': refresh});
+      await _channel.invokeMethod<void>('write', {
+        'key': _refreshKey,
+        'value': refresh,
+      });
     } catch (_) {
       // A device whose Keystore refuses us still plays; the session just does
       // not survive a restart.
@@ -72,19 +77,23 @@ class KeystoreTokens implements TokenStore {
     _refresh = null;
     try {
       await _channel.invokeMethod<void>('delete', {'key': _refreshKey});
-    } catch (_) {/* nothing to clean up */}
+    } catch (_) {
+      /* nothing to clean up */
+    }
   }
 }
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Color(0x00000000),
-    statusBarIconBrightness: Brightness.light,
-    systemNavigationBarColor: T.bg,
-    systemNavigationBarIconBrightness: Brightness.light,
-  ));
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Color(0x00000000),
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarColor: T.bg,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ),
+  );
 
   final tokens = KeystoreTokens();
   await tokens.load();
@@ -108,26 +117,26 @@ class BraelaApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => WidgetsApp(
-        title: 'Braela Spin',
-        color: T.bg,
-        // No Material or Cupertino: the app draws its own five widgets, and
-        // skipping both keeps the icon fonts and theme machinery out of the APK.
-        builder: (context, _) => Container(
-          decoration: const BoxDecoration(
-            gradient: RadialGradient(
-              center: Alignment(-0.7, -1.1),
-              radius: 1.5,
-              colors: [Color(0x2BF26B21), T.bg],
-            ),
-          ),
-          child: _Gate(store: store),
+    title: 'Braela Spin',
+    color: T.bg,
+    // No Material or Cupertino: the app draws its own five widgets, and
+    // skipping both keeps the icon fonts and theme machinery out of the APK.
+    builder: (context, _) => Container(
+      decoration: const BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment(-0.7, -1.1),
+          radius: 1.5,
+          colors: [Color(0x2BF26B21), T.bg],
         ),
-        pageRouteBuilder: <T2>(RouteSettings settings, WidgetBuilder builder) =>
-            PageRouteBuilder<T2>(
+      ),
+      child: _Gate(store: store),
+    ),
+    pageRouteBuilder: <T2>(RouteSettings settings, WidgetBuilder builder) =>
+        PageRouteBuilder<T2>(
           settings: settings,
           pageBuilder: (ctx, __, ___) => builder(ctx),
         ),
-      );
+  );
 }
 
 /// The auth gate: a spinner while we find out, then either sign-in or the app.
@@ -137,15 +146,15 @@ class _Gate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ValueListenableBuilder<AuthState>(
-        valueListenable: store.auth,
-        builder: (_, state, __) => switch (state) {
-          AuthState.unknown => const Center(
-              child: SizedBox(width: 24, height: 24, child: _Boot()),
-            ),
-          AuthState.signedOut => AuthScreen(store: store),
-          AuthState.signedIn => Shell(store: store),
-        },
-      );
+    valueListenable: store.auth,
+    builder: (_, state, __) => switch (state) {
+      AuthState.unknown => const Center(
+        child: SizedBox(width: 24, height: 24, child: _Boot()),
+      ),
+      AuthState.signedOut => AuthScreen(store: store),
+      AuthState.signedIn => Shell(store: store),
+    },
+  );
 }
 
 class _Boot extends StatelessWidget {
@@ -191,9 +200,9 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   }
 
   void _go(int tab) => setState(() {
-        _tab = tab;
-        _invite = false;
-      });
+    _tab = tab;
+    _invite = false;
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -204,19 +213,28 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
             0 => WalletScreen(store: store),
             1 => ResultsScreen(store: store),
             3 => HistoryScreen(store: store),
-            4 => ProfileScreen(store: store, onInvite: () => setState(() => _invite = true)),
+            4 => ProfileScreen(
+              store: store,
+              onInvite: () => setState(() => _invite = true),
+            ),
             _ => SpinScreen(store: store, onNavigate: _go),
           };
 
-    return Stack(children: [
-      Positioned.fill(child: body),
-      Positioned(left: 0, right: 0, bottom: 0, child: _nav()),
-    ]);
+    return Stack(
+      children: [
+        Positioned.fill(child: body),
+        Positioned(left: 0, right: 0, bottom: 0, child: _nav()),
+      ],
+    );
   }
 
   Widget _nav() {
     const items = [
-      ('👛', 'Wallet'), ('🎯', 'Results'), ('⚡', 'Spin'), ('🕘', 'History'), ('👤', 'Profile'),
+      ('👛', 'Wallet'),
+      ('🎯', 'Results'),
+      ('⚡', 'Spin'),
+      ('🕘', 'History'),
+      ('👤', 'Profile'),
     ];
     return Container(
       height: 68 + MediaQuery.of(context).padding.bottom,
@@ -230,6 +248,8 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
           for (var i = 0; i < items.length; i++)
             Expanded(
               child: GestureDetector(
+                // Opaque: an unselected control paints no background, and the
+                // default deferToChild would only accept taps on the text itself.
                 behavior: HitTestBehavior.opaque,
                 onTap: () {
                   HapticFeedback.selectionClick();
@@ -248,48 +268,64 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Opacity(opacity: active ? 1 : 0.45, child: Text(item.$1, style: const TextStyle(fontSize: 18))),
+        Opacity(
+          opacity: active ? 1 : 0.45,
+          child: Text(item.$1, style: const TextStyle(fontSize: 18)),
+        ),
         const SizedBox(height: 3),
-        Text(item.$2,
-            style: TextStyle(fontSize: 10, color: active ? T.amberHi : T.t4)),
+        Text(
+          item.$2,
+          style: TextStyle(fontSize: 10, color: active ? T.amberHi : T.t4),
+        ),
       ],
     );
   }
 
   /// The raised centre action, as in the reference design.
   Widget _fab((String, String) item, int i) => Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Transform.translate(
-            offset: const Offset(0, -22),
-            child: Container(
-              width: 50, height: 50,
-              alignment: Alignment.center,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: T.gradAmber,
-                boxShadow: [
-                  BoxShadow(color: Color(0x73F26B21), blurRadius: 22, offset: Offset(0, 8)),
-                  BoxShadow(color: T.bg, blurRadius: 0, spreadRadius: 5),
-                ],
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      Transform.translate(
+        offset: const Offset(0, -22),
+        child: Container(
+          width: 50,
+          height: 50,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: T.gradAmber,
+            boxShadow: [
+              BoxShadow(
+                color: Color(0x73F26B21),
+                blurRadius: 22,
+                offset: Offset(0, 8),
               ),
-              child: const Text('⚡', style: TextStyle(fontSize: 21)),
-            ),
+              BoxShadow(color: T.bg, blurRadius: 0, spreadRadius: 5),
+            ],
           ),
-          Transform.translate(
-            offset: const Offset(0, -18),
-            child: Text(item.$2,
-                style: TextStyle(
-                    fontSize: 10, color: _tab == i && !_invite ? T.amberHi : T.t4)),
+          child: const Text('⚡', style: TextStyle(fontSize: 21)),
+        ),
+      ),
+      Transform.translate(
+        offset: const Offset(0, -18),
+        child: Text(
+          item.$2,
+          style: TextStyle(
+            fontSize: 10,
+            color: _tab == i && !_invite ? T.amberHi : T.t4,
           ),
-        ],
-      );
+        ),
+      ),
+    ],
+  );
 }
 
 /// Seeds the opening stake once the config arrives, so the app never opens on
 /// a bet the player cannot afford.
 void seedStake(Store store) {
   store.config.addListener(() {
-    if (store.stake.value == 0) store.stake.value = defaultStake(store.maxStake());
+    if (store.stake.value == 0) {
+      store.stake.value = defaultStake(store.maxStake());
+    }
   });
 }

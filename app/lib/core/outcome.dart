@@ -43,7 +43,12 @@ class Outcome {
 }
 
 class PayoutMismatch implements Exception {
-  const PayoutMismatch(this.stakeCents, this.multiplierBp, this.got, this.expected);
+  const PayoutMismatch(
+    this.stakeCents,
+    this.multiplierBp,
+    this.got,
+    this.expected,
+  );
   final Cents stakeCents;
   final BasisPoints multiplierBp;
   final Cents got;
@@ -68,7 +73,11 @@ Cents expectedPayout(Cents stakeCents, BasisPoints multiplierBp) =>
 /// The server is authoritative, so a mismatch means the two disagree about the
 /// arithmetic — worth surfacing loudly rather than quietly rendering a wrong
 /// number.
-Outcome describeOutcome(Cents stakeCents, BasisPoints multiplierBp, Cents payoutCents) {
+Outcome describeOutcome(
+  Cents stakeCents,
+  BasisPoints multiplierBp,
+  Cents payoutCents,
+) {
   final expected = expectedPayout(stakeCents, multiplierBp);
   if (payoutCents != expected) {
     throw PayoutMismatch(stakeCents, multiplierBp, payoutCents, expected);

@@ -55,39 +55,66 @@ const int _jackpotBp = 2000000; // 200x
 Celebration celebrationFor(OutcomeKind kind, BasisPoints multiplierBp) {
   if (kind == OutcomeKind.loss) {
     return const Celebration(
-      tier: Tier.loss, title: 'No win', confetti: 0, rays: false,
-      countUp: false, dismiss: Duration(milliseconds: 1700), chime: [],
+      tier: Tier.loss,
+      title: 'No win',
+      confetti: 0,
+      rays: false,
+      countUp: false,
+      dismiss: Duration(milliseconds: 1700),
+      chime: [],
     );
   }
   if (kind == OutcomeKind.refund) {
     return const Celebration(
-      tier: Tier.refund, title: 'Bet returned', confetti: 0, rays: false,
-      countUp: false, dismiss: Duration(milliseconds: 2000), chime: [520],
+      tier: Tier.refund,
+      title: 'Bet returned',
+      confetti: 0,
+      rays: false,
+      countUp: false,
+      dismiss: Duration(milliseconds: 2000),
+      chime: [520],
     );
   }
   if (multiplierBp >= _jackpotBp) {
     return const Celebration(
-      tier: Tier.jackpot, title: 'JACKPOT!', confetti: 90, rays: true,
-      countUp: true, dismiss: Duration(milliseconds: 5200),
+      tier: Tier.jackpot,
+      title: 'JACKPOT!',
+      confetti: 90,
+      rays: true,
+      countUp: true,
+      dismiss: Duration(milliseconds: 5200),
       chime: [523, 659, 784, 1047, 1319],
     );
   }
   if (multiplierBp >= _hugeBp) {
     return const Celebration(
-      tier: Tier.huge, title: 'HUGE WIN!', confetti: 55, rays: true,
-      countUp: true, dismiss: Duration(milliseconds: 4200),
+      tier: Tier.huge,
+      title: 'HUGE WIN!',
+      confetti: 55,
+      rays: true,
+      countUp: true,
+      dismiss: Duration(milliseconds: 4200),
       chime: [523, 659, 784, 1047],
     );
   }
   if (multiplierBp >= _bigBp) {
     return const Celebration(
-      tier: Tier.big, title: 'BIG WIN!', confetti: 32, rays: true,
-      countUp: true, dismiss: Duration(milliseconds: 3600),
+      tier: Tier.big,
+      title: 'BIG WIN!',
+      confetti: 32,
+      rays: true,
+      countUp: true,
+      dismiss: Duration(milliseconds: 3600),
       chime: [523, 659, 784],
     );
   }
   return const Celebration(
-    tier: Tier.small, title: 'You won', confetti: 14, rays: false,
-    countUp: true, dismiss: Duration(milliseconds: 3000), chime: [587, 784],
+    tier: Tier.small,
+    title: 'You won',
+    confetti: 14,
+    rays: false,
+    countUp: true,
+    dismiss: Duration(milliseconds: 3000),
+    chime: [587, 784],
   );
 }

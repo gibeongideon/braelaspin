@@ -64,7 +64,8 @@ const Map<String, String> _copy = {
   'stake_too_small': 'That bet is below the minimum.',
   'stake_too_large': 'That bet is above the maximum.',
   'insufficient_funds': "You don't have enough for that bet.",
-  'stake_exceeds_bankroll': 'That bet is too large right now. Try a smaller amount.',
+  'stake_exceeds_bankroll':
+      'That bet is too large right now. Try a smaller amount.',
   'spin_in_flight': 'That spin is still being processed. Please wait a moment.',
   // money
   'withdrawal_already_pending': 'You already have a withdrawal in progress.',

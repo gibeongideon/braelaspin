@@ -29,7 +29,12 @@ double _mod360(double d) => ((d % 360) + 360) % 360;
 ///
 /// [from] matters: we solve from wherever the wheel rests and keep the angle
 /// monotonic. Resetting to zero before each spin snaps visibly.
-double targetAngle(double from, int segment, int segmentCount, {math.Random? rng}) {
+double targetAngle(
+  double from,
+  int segment,
+  int segmentCount, {
+  math.Random? rng,
+}) {
   if (segment < 1 || segment > segmentCount) {
     throw RangeError('segment $segment out of range 1..$segmentCount');
   }
@@ -57,7 +62,10 @@ int indicatedSegment(double degrees, int segmentCount) =>
 /// canvas -90deg, a feature drawn at canvas `a` appears at `a + rotation`, and
 /// segment k occupies wheel-local [(k-1)S, kS). Therefore segment k spans
 /// canvas [(k-1)S - 90, kS - 90).
-({double startDeg, double endDeg, double midDeg}) segmentArcDeg(int segment, int segmentCount) {
+({double startDeg, double endDeg, double midDeg}) segmentArcDeg(
+  int segment,
+  int segmentCount,
+) {
   if (segment < 1 || segment > segmentCount) {
     throw RangeError('segment $segment out of range 1..$segmentCount');
   }

@@ -30,6 +30,9 @@ class AppButton extends StatelessWidget {
     return Opacity(
       opacity: enabled ? 1 : 0.45,
       child: GestureDetector(
+        // Opaque: an unselected control paints no background, and the
+        // default deferToChild would only accept taps on the text itself.
+        behavior: HitTestBehavior.opaque,
         onTap: enabled
             ? () {
                 HapticFeedback.lightImpact();
@@ -45,7 +48,13 @@ class AppButton extends StatelessWidget {
             border: primary ? null : Border.all(color: T.border2),
             borderRadius: T.brPill,
             boxShadow: primary
-                ? const [BoxShadow(color: Color(0x59F26B21), blurRadius: 26, offset: Offset(0, 10))]
+                ? const [
+                    BoxShadow(
+                      color: Color(0x59F26B21),
+                      blurRadius: 26,
+                      offset: Offset(0, 10),
+                    ),
+                  ]
                 : null,
           ),
           child: busy
@@ -71,9 +80,12 @@ class _Spinner extends StatefulWidget {
   State<_Spinner> createState() => _SpinnerState();
 }
 
-class _SpinnerState extends State<_Spinner> with SingleTickerProviderStateMixin {
-  late final AnimationController c =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 700))..repeat();
+class _SpinnerState extends State<_Spinner>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 700),
+  )..repeat();
 
   @override
   void dispose() {
@@ -83,38 +95,42 @@ class _SpinnerState extends State<_Spinner> with SingleTickerProviderStateMixin 
 
   @override
   Widget build(BuildContext context) => RotationTransition(
-        turns: c,
-        child: Container(
-          width: 18,
-          height: 18,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border(
-              top: BorderSide(color: T.t1, width: 2),
-              left: BorderSide(color: Color(0x40FFFFFF), width: 2),
-              right: BorderSide(color: Color(0x40FFFFFF), width: 2),
-              bottom: BorderSide(color: Color(0x40FFFFFF), width: 2),
-            ),
-          ),
+    turns: c,
+    child: Container(
+      width: 18,
+      height: 18,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border(
+          top: BorderSide(color: T.t1, width: 2),
+          left: BorderSide(color: Color(0x40FFFFFF), width: 2),
+          right: BorderSide(color: Color(0x40FFFFFF), width: 2),
+          bottom: BorderSide(color: Color(0x40FFFFFF), width: 2),
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class Card extends StatelessWidget {
-  const Card({super.key, required this.child, this.padding = const EdgeInsets.all(15)});
+  const Card({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(15),
+  });
   final Widget child;
   final EdgeInsets padding;
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: padding,
-        decoration: BoxDecoration(
-          color: T.surface,
-          border: Border.all(color: T.border),
-          borderRadius: T.brLg,
-        ),
-        child: child,
-      );
+    padding: padding,
+    decoration: BoxDecoration(
+      color: T.surface,
+      border: Border.all(color: T.border),
+      borderRadius: T.brLg,
+    ),
+    child: child,
+  );
 }
 
 class Field extends StatefulWidget {
@@ -159,16 +175,27 @@ class _FieldState extends State<Field> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(widget.label,
-            style: const TextStyle(fontSize: 12, color: T.t3, fontWeight: FontWeight.w600)),
+        Text(
+          widget.label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: T.t3,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         const SizedBox(height: 6),
         GestureDetector(
+          // Opaque: an unselected control paints no background, and the
+          // default deferToChild would only accept taps on the text itself.
+          behavior: HitTestBehavior.opaque,
           onTap: () => _node.requestFocus(),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
             decoration: BoxDecoration(
               color: const Color(0x47000000),
-              border: Border.all(color: widget.error != null ? T.red : T.border),
+              border: Border.all(
+                color: widget.error != null ? T.red : T.border,
+              ),
               borderRadius: T.brR,
             ),
             child: EditableText(
@@ -187,8 +214,13 @@ class _FieldState extends State<Field> {
         ),
         if (widget.error != null || widget.helper != null) ...[
           const SizedBox(height: 5),
-          Text(widget.error ?? widget.helper!,
-              style: TextStyle(fontSize: 12, color: widget.error != null ? T.red : T.t3)),
+          Text(
+            widget.error ?? widget.helper!,
+            style: TextStyle(
+              fontSize: 12,
+              color: widget.error != null ? T.red : T.t3,
+            ),
+          ),
         ],
       ],
     );
@@ -197,7 +229,14 @@ class _FieldState extends State<Field> {
 
 /// A row in a list — icon, title, meta, trailing amount.
 class Row2 extends StatelessWidget {
-  const Row2({super.key, required this.icon, required this.title, this.meta, this.trailing, this.trailingColor});
+  const Row2({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.meta,
+    this.trailing,
+    this.trailingColor,
+  });
   final String icon;
   final String title;
   final String? meta;
@@ -206,45 +245,65 @@ class Row2 extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: T.border)),
+    padding: const EdgeInsets.symmetric(vertical: 12),
+    decoration: const BoxDecoration(
+      border: Border(bottom: BorderSide(color: T.border)),
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(
+            color: T.surface2,
+            borderRadius: T.brR,
+          ),
+          child: Text(icon, style: const TextStyle(fontSize: 14)),
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 34, height: 34,
-              alignment: Alignment.center,
-              decoration: const BoxDecoration(color: T.surface2, borderRadius: T.brR),
-              child: Text(icon, style: const TextStyle(fontSize: 14)),
-            ),
-            const SizedBox(width: 11),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: T.t1)),
-                  if (meta != null) ...[
-                    const SizedBox(height: 1),
-                    Text(meta!, style: T.hint),
-                  ],
-                ],
+        const SizedBox(width: 11),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: T.t1,
+                ),
               ),
-            ),
-            if (trailing != null)
-              Text(trailing!,
-                  style: TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w700,
-                    color: trailingColor ?? T.t2,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  )),
-          ],
+              if (meta != null) ...[
+                const SizedBox(height: 1),
+                Text(meta!, style: T.hint),
+              ],
+            ],
+          ),
         ),
-      );
+        if (trailing != null)
+          Text(
+            trailing!,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: trailingColor ?? T.t2,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+      ],
+    ),
+  );
 }
 
 class EmptyState extends StatelessWidget {
-  const EmptyState({super.key, required this.glyph, required this.title, this.hint, this.onRetry});
+  const EmptyState({
+    super.key,
+    required this.glyph,
+    required this.title,
+    this.hint,
+    this.onRetry,
+  });
   final String glyph;
   final String title;
   final String? hint;
@@ -252,23 +311,34 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
-        child: Column(
-          children: [
-            Opacity(opacity: 0.5, child: Text(glyph, style: const TextStyle(fontSize: 32))),
-            const SizedBox(height: 10),
-            Text(title, style: T.sub, textAlign: TextAlign.center),
-            if (hint != null) ...[
-              const SizedBox(height: 4),
-              Text(hint!, style: T.hint, textAlign: TextAlign.center),
-            ],
-            if (onRetry != null) ...[
-              const SizedBox(height: 14),
-              SizedBox(width: 140, child: AppButton(label: 'Try again', primary: false, compact: true, onPressed: onRetry)),
-            ],
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+    child: Column(
+      children: [
+        Opacity(
+          opacity: 0.5,
+          child: Text(glyph, style: const TextStyle(fontSize: 32)),
         ),
-      );
+        const SizedBox(height: 10),
+        Text(title, style: T.sub, textAlign: TextAlign.center),
+        if (hint != null) ...[
+          const SizedBox(height: 4),
+          Text(hint!, style: T.hint, textAlign: TextAlign.center),
+        ],
+        if (onRetry != null) ...[
+          const SizedBox(height: 14),
+          SizedBox(
+            width: 140,
+            child: AppButton(
+              label: 'Try again',
+              primary: false,
+              compact: true,
+              onPressed: onRetry,
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
 }
 
 /// Toast. The caller states the kind; an optional action turns a dead-end
@@ -299,30 +369,51 @@ void showToast(
   entry = OverlayEntry(
     builder: (ctx) => Positioned(
       top: MediaQuery.of(ctx).padding.top + 12,
-      left: 16, right: 16,
+      left: 16,
+      right: 16,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: const Color(0xFF241A20),
           border: Border.all(color: colour),
           borderRadius: T.brR,
-          boxShadow: const [BoxShadow(color: Color(0xCC000000), blurRadius: 34, offset: Offset(0, 14))],
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0xCC000000),
+              blurRadius: 34,
+              offset: Offset(0, 14),
+            ),
+          ],
         ),
         child: Row(
           children: [
             Text(glyph, style: const TextStyle(fontSize: 17)),
             const SizedBox(width: 10),
-            Expanded(child: Text(message, style: const TextStyle(fontSize: 14, color: T.t1))),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(fontSize: 14, color: T.t1),
+              ),
+            ),
             if (action != null)
               GestureDetector(
+                // Opaque: an unselected control paints no background, and the
+                // default deferToChild would only accept taps on the text itself.
+                behavior: HitTestBehavior.opaque,
                 onTap: () {
                   entry.remove();
                   action.onTap();
                 },
                 child: Padding(
                   padding: const EdgeInsets.only(left: 10),
-                  child: Text(action.label,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: T.amberHi)),
+                  child: Text(
+                    action.label,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: T.amberHi,
+                    ),
+                  ),
                 ),
               ),
           ],
@@ -333,7 +424,10 @@ void showToast(
 
   overlay.insert(entry);
   // Errors the user must act on stay longer than a confirmation.
-  Future<void>.delayed(Duration(milliseconds: kind == 'error' ? 6000 : 3800), () {
-    if (entry.mounted) entry.remove();
-  });
+  Future<void>.delayed(
+    Duration(milliseconds: kind == 'error' ? 6000 : 3800),
+    () {
+      if (entry.mounted) entry.remove();
+    },
+  );
 }

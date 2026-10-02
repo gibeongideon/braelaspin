@@ -35,11 +35,13 @@ class Ticker {
   /// A short rising arpeggio for a win.
   void chime(List<double> notes) {
     if (!enabled || notes.isEmpty) return;
-    _channel.invokeMethod<void>('chime', {
-      'notes': notes,
-      'noteMs': 200,
-      'gapMs': 85,
-    }).catchError((_) {});
+    _channel
+        .invokeMethod<void>('chime', {
+          'notes': notes,
+          'noteMs': 200,
+          'gapMs': 85,
+        })
+        .catchError((_) {});
   }
 
   void dispose() {}

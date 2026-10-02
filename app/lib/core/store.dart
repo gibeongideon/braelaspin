@@ -90,7 +90,11 @@ class Store {
     }
   }
 
-  Future<void> register(String phone, String password, [String? refCode]) async {
+  Future<void> register(
+    String phone,
+    String password, [
+    String? refCode,
+  ]) async {
     final j = await api.post<Map<String, dynamic>>('/v1/auth/register', {
       'phone': phone,
       'password': password,
@@ -101,8 +105,10 @@ class Store {
   }
 
   Future<void> login(String phone, String password) async {
-    final j = await api.post<Map<String, dynamic>>(
-        '/v1/auth/login', {'phone': phone, 'password': password}, false);
+    final j = await api.post<Map<String, dynamic>>('/v1/auth/login', {
+      'phone': phone,
+      'password': password,
+    }, false);
     await _adopt(Session.fromJson(j));
     await refreshMe();
   }
@@ -110,7 +116,9 @@ class Store {
   Future<void> logout() async {
     final rt = tokens.refresh;
     try {
-      if (rt != null) await api.post<void>('/v1/auth/logout', {'refresh': rt}, false);
+      if (rt != null) {
+        await api.post<void>('/v1/auth/logout', {'refresh': rt}, false);
+      }
     } catch (_) {
       // Best effort: the local session is cleared regardless, and a failed
       // revoke must never trap the user in a signed-in state.
@@ -138,7 +146,9 @@ class Store {
   }
 
   Future<void> refreshBalances() async {
-    balances.value = Balances.fromJson(await api.get<Map<String, dynamic>>('/v1/wallet'));
+    balances.value = Balances.fromJson(
+      await api.get<Map<String, dynamic>>('/v1/wallet'),
+    );
   }
 
   Future<void> loadHistory() async {
@@ -168,7 +178,11 @@ class Store {
     try {
       final j = await api.post<Map<String, dynamic>>(
         '/v1/game/spin',
-        {'stake_cents': stake.value, 'real': realMode.value, 'client_ref': clientRef},
+        {
+          'stake_cents': stake.value,
+          'real': realMode.value,
+          'client_ref': clientRef,
+        },
         true,
         clientRef,
       );
@@ -197,7 +211,8 @@ class Store {
       await Future<void>.delayed(Duration(seconds: attempt + 1));
       try {
         final j = await api.get<Map<String, dynamic>>(
-            '/v1/game/spins/by-ref/${Uri.encodeComponent(clientRef)}');
+          '/v1/game/spins/by-ref/${Uri.encodeComponent(clientRef)}',
+        );
         return SpinResult.fromJson(j);
       } on ApiException catch (e) {
         // 404 means it genuinely never happened — stop asking.
@@ -234,8 +249,18 @@ class Store {
   void clearSpin() => spin.value = SpinPhase.idle;
 
   void dispose() {
-    for (final n in [auth, user, balances, config, referrals, stake, realMode,
-                     hideBalance, spin, transactions]) {
+    for (final n in [
+      auth,
+      user,
+      balances,
+      config,
+      referrals,
+      stake,
+      realMode,
+      hideBalance,
+      spin,
+      transactions,
+    ]) {
       n.dispose();
     }
     api.close();

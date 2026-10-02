@@ -63,7 +63,11 @@ class _AuthScreenState extends State<AuthScreen> {
       return;
     }
     if (_password.text.length < 8) {
-      showToast(context, 'Choose a password of at least 8 characters.', kind: 'error');
+      showToast(
+        context,
+        'Choose a password of at least 8 characters.',
+        kind: 'error',
+      );
       return;
     }
 
@@ -71,7 +75,9 @@ class _AuthScreenState extends State<AuthScreen> {
     try {
       if (_register) {
         await widget.store.register(p.phone, _password.text, _ref.text.trim());
-        if (mounted) showToast(context, 'Welcome! Practice balance added.', kind: 'win');
+        if (mounted) {
+          showToast(context, 'Welcome! Practice balance added.', kind: 'win');
+        }
       } else {
         await widget.store.login(p.phone, _password.text);
       }
@@ -94,12 +100,19 @@ class _AuthScreenState extends State<AuthScreen> {
             child: Column(
               children: [
                 Container(
-                  width: 60, height: 60,
+                  width: 60,
+                  height: 60,
                   alignment: Alignment.center,
                   decoration: const BoxDecoration(
                     gradient: T.gradAmber,
                     borderRadius: BorderRadius.all(Radius.circular(19)),
-                    boxShadow: [BoxShadow(color: Color(0x66F26B21), blurRadius: 32, offset: Offset(0, 12))],
+                    boxShadow: [
+                      BoxShadow(
+                        color: Color(0x66F26B21),
+                        blurRadius: 32,
+                        offset: Offset(0, 12),
+                      ),
+                    ],
                   ),
                   child: const Text('⚡', style: TextStyle(fontSize: 30)),
                 ),
@@ -118,10 +131,20 @@ class _AuthScreenState extends State<AuthScreen> {
               border: Border.all(color: T.border),
               borderRadius: T.brPill,
             ),
-            child: Row(children: [
-              _tab('Sign in', !_register, () => setState(() => _register = false)),
-              _tab('Create account', _register, () => setState(() => _register = true)),
-            ]),
+            child: Row(
+              children: [
+                _tab(
+                  'Sign in',
+                  !_register,
+                  () => setState(() => _register = false),
+                ),
+                _tab(
+                  'Create account',
+                  _register,
+                  () => setState(() => _register = true),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 18),
           Field(
@@ -156,24 +179,30 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Widget _tab(String label, bool active, VoidCallback onTap) => Expanded(
-        child: GestureDetector(
-          onTap: () {
-            HapticFeedback.selectionClick();
-            onTap();
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: active ? T.surface2 : null,
-              borderRadius: T.brPill,
-            ),
-            child: Text(label,
-                style: TextStyle(
-                  fontSize: 14, fontWeight: FontWeight.w700,
-                  color: active ? T.t1 : T.t3,
-                )),
+    child: GestureDetector(
+      // Opaque: an unselected control paints no background, and the
+      // default deferToChild would only accept taps on the text itself.
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: active ? T.surface2 : null,
+          borderRadius: T.brPill,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: active ? T.t1 : T.t3,
           ),
         ),
-      );
+      ),
+    ),
+  );
 }

@@ -42,8 +42,12 @@ class WheelView extends StatefulWidget {
   State<WheelView> createState() => WheelViewState();
 }
 
-class WheelViewState extends State<WheelView> with SingleTickerProviderStateMixin {
-  late final AnimationController _anim = AnimationController(vsync: this, duration: kSpinDuration);
+class WheelViewState extends State<WheelView>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _anim = AnimationController(
+    vsync: this,
+    duration: kSpinDuration,
+  );
 
   ui.Picture? _face;
   double _facePx = 0;
@@ -102,14 +106,20 @@ class WheelViewState extends State<WheelView> with SingleTickerProviderStateMixi
     assert(() {
       final landed = indicatedSegment(_to, n);
       if (landed != segment) {
-        throw StateError('wheel landed on $landed but the server said $segment');
+        throw StateError(
+          'wheel landed on $landed but the server said $segment',
+        );
       }
       return true;
     }());
   }
 
   void _ensureFace(double px) {
-    if (_face != null && _facePx == px && _faceSegments == widget.segments.length) return;
+    if (_face != null &&
+        _facePx == px &&
+        _faceSegments == widget.segments.length) {
+      return;
+    }
     _face?.dispose();
     _face = recordFace(widget.segments, px);
     _facePx = px;
@@ -175,8 +185,13 @@ class _FlapperPainter extends CustomPainter {
         ..close(),
       Paint()
         ..shader = ui.Gradient.linear(
-          Offset(w / 2, h * 0.26), Offset(w / 2, h),
-          [const Color(0xFFFF8A3D), const Color(0xFFD94F12), const Color(0xFFA8380A)],
+          Offset(w / 2, h * 0.26),
+          Offset(w / 2, h),
+          [
+            const Color(0xFFFF8A3D),
+            const Color(0xFFD94F12),
+            const Color(0xFFA8380A),
+          ],
           [0.0, 0.65, 1.0],
         ),
     );
@@ -184,13 +199,17 @@ class _FlapperPainter extends CustomPainter {
     final capR = w * 0.31;
     final capC = Offset(w / 2, capR);
     canvas.drawCircle(
-      capC, capR,
+      capC,
+      capR,
       Paint()
         ..shader = ui.Gradient.radial(
-          capC.translate(-capR * 0.32, -capR * 0.4), capR * 1.4,
+          capC.translate(-capR * 0.32, -capR * 0.4),
+          capR * 1.4,
           [
-            const Color(0xFFFFFFFF), const Color(0xFFE8E2E4),
-            const Color(0xFF9AA0A8), const Color(0xFF4B5157),
+            const Color(0xFFFFFFFF),
+            const Color(0xFFE8E2E4),
+            const Color(0xFF9AA0A8),
+            const Color(0xFF4B5157),
           ],
           [0.0, 0.22, 0.6, 1.0],
         ),

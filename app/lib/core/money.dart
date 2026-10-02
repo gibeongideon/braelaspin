@@ -63,8 +63,20 @@ String formatWhen(String iso, {DateTime? now}) {
   if (secs < 86400) return '${secs ~/ 3600} h ago';
   if (secs < 7 * 86400) return '${secs ~/ 86400} d ago';
 
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
   final d = '${then.day} ${months[then.month - 1]}';
   return then.year == ref.year ? d : '$d ${then.year}';
 }

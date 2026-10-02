@@ -40,7 +40,11 @@ Future<void> showResult(BuildContext context, Outcome outcome) async {
 }
 
 class _ResultCard extends StatefulWidget {
-  const _ResultCard({required this.outcome, required this.party, required this.onDismiss});
+  const _ResultCard({
+    required this.outcome,
+    required this.party,
+    required this.onDismiss,
+  });
   final Outcome outcome;
   final Celebration party;
   final VoidCallback onDismiss;
@@ -49,15 +53,24 @@ class _ResultCard extends StatefulWidget {
   State<_ResultCard> createState() => _ResultCardState();
 }
 
-class _ResultCardState extends State<_ResultCard> with TickerProviderStateMixin {
-  late final AnimationController _in =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 420))..forward();
-  late final AnimationController _rays =
-      AnimationController(vsync: this, duration: const Duration(seconds: 14));
-  late final AnimationController _count =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 620));
-  late final AnimationController _fall =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 3400));
+class _ResultCardState extends State<_ResultCard>
+    with TickerProviderStateMixin {
+  late final AnimationController _in = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 420),
+  )..forward();
+  late final AnimationController _rays = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 14),
+  );
+  late final AnimationController _count = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 620),
+  );
+  late final AnimationController _fall = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 3400),
+  );
 
   late final List<_Particle> _confetti;
 
@@ -69,7 +82,10 @@ class _ResultCardState extends State<_ResultCard> with TickerProviderStateMixin 
     if (p.countUp) _count.forward();
 
     final rng = math.Random();
-    _confetti = List.generate(p.confetti, (i) => _Particle.random(rng, i, p.tier));
+    _confetti = List.generate(
+      p.confetti,
+      (i) => _Particle.random(rng, i, p.tier),
+    );
     if (p.confetti > 0) _fall.forward();
 
     Future<void>.delayed(p.dismiss, () {
@@ -87,13 +103,13 @@ class _ResultCardState extends State<_ResultCard> with TickerProviderStateMixin 
   }
 
   Color get _accent => switch (widget.party.tier) {
-        Tier.loss => T.t3,
-        Tier.refund => T.gold,
-        Tier.small => T.greenHi,
-        Tier.big => T.amberHi,
-        Tier.huge => T.gold,
-        Tier.jackpot => T.pink,
-      };
+    Tier.loss => T.t3,
+    Tier.refund => T.gold,
+    Tier.small => T.greenHi,
+    Tier.big => T.amberHi,
+    Tier.huge => T.gold,
+    Tier.jackpot => T.pink,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -102,6 +118,9 @@ class _ResultCardState extends State<_ResultCard> with TickerProviderStateMixin 
     final times = multiplierTimes(o.multiplierBp);
 
     return GestureDetector(
+      // Opaque: an unselected control paints no background, and the
+      // default deferToChild would only accept taps on the text itself.
+      behavior: HitTestBehavior.opaque,
       onTap: widget.onDismiss,
       child: Container(
         color: const Color(0xBD080507),
@@ -112,7 +131,9 @@ class _ResultCardState extends State<_ResultCard> with TickerProviderStateMixin 
               Positioned.fill(
                 child: AnimatedBuilder(
                   animation: _fall,
-                  builder: (_, __) => CustomPaint(painter: _ConfettiPainter(_confetti, _fall.value)),
+                  builder: (_, __) => CustomPaint(
+                    painter: _ConfettiPainter(_confetti, _fall.value),
+                  ),
                 ),
               ),
             ScaleTransition(
@@ -131,12 +152,19 @@ class _ResultCardState extends State<_ResultCard> with TickerProviderStateMixin 
       padding: const EdgeInsets.fromLTRB(36, 30, 36, 24),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          begin: Alignment.topCenter, end: Alignment.bottomCenter,
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
           colors: [_accent.withValues(alpha: 0.18), const Color(0xFF14100F)],
         ),
         border: Border.all(color: _accent.withValues(alpha: 0.55)),
         borderRadius: const BorderRadius.all(Radius.circular(28)),
-        boxShadow: const [BoxShadow(color: Color(0xEB000000), blurRadius: 70, offset: Offset(0, 26))],
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0xEB000000),
+            blurRadius: 70,
+            offset: Offset(0, 26),
+          ),
+        ],
       ),
       child: Stack(
         alignment: Alignment.center,
@@ -158,12 +186,14 @@ class _ResultCardState extends State<_ResultCard> with TickerProviderStateMixin 
             children: [
               // The multiplier as a token, echoing the wheel tile it came from.
               Container(
-                width: 62, height: 62,
+                width: 62,
+                height: 62,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: LinearGradient(
-                    begin: Alignment.topLeft, end: Alignment.bottomRight,
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                     colors: o.kind == OutcomeKind.loss
                         ? const [Color(0xFF4A3F47), Color(0xFF221B20)]
                         : [_accent, _accent.withValues(alpha: 0.6)],
@@ -173,7 +203,8 @@ class _ResultCardState extends State<_ResultCard> with TickerProviderStateMixin 
                 child: Text(
                   o.kind == OutcomeKind.loss ? '—' : '$times×',
                   style: TextStyle(
-                    fontSize: 19, fontWeight: FontWeight.w800,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
                     color: p.tier == Tier.huge ? const Color(0xFF3A2A00) : T.t1,
                   ),
                 ),
@@ -197,13 +228,19 @@ class _ResultCardState extends State<_ResultCard> with TickerProviderStateMixin 
                       // Always finishes on the exact payout: the last frame
                       // assigns the real value, not the interpolation.
                       ? (_count.isCompleted
-                          ? o.payoutCents
-                          : (o.payoutCents * Curves.easeOutCubic.transform(_count.value)).round())
+                            ? o.payoutCents
+                            : (o.payoutCents *
+                                      Curves.easeOutCubic.transform(
+                                        _count.value,
+                                      ))
+                                  .round())
                       : (o.kind == OutcomeKind.loss ? 0 : o.payoutCents);
                   return Text(
                     formatKes(shown),
                     style: TextStyle(
-                      fontSize: p.tier == Tier.jackpot ? 44 : (p.tier == Tier.huge ? 42 : 38),
+                      fontSize: p.tier == Tier.jackpot
+                          ? 44
+                          : (p.tier == Tier.huge ? 42 : 38),
                       fontWeight: FontWeight.w800,
                       letterSpacing: -0.8,
                       color: o.kind == OutcomeKind.loss ? T.t3 : _accent,
@@ -219,7 +256,8 @@ class _ResultCardState extends State<_ResultCard> with TickerProviderStateMixin 
                 Text(
                   '${formatKes(o.stakeCents)} × $times = ${formatKes(o.payoutCents)}',
                   style: const TextStyle(
-                    fontSize: 12, color: T.t3,
+                    fontSize: 12,
+                    color: T.t3,
                     fontFeatures: [FontFeature.tabularFigures()],
                   ),
                 ),
@@ -227,12 +265,15 @@ class _ResultCardState extends State<_ResultCard> with TickerProviderStateMixin 
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.only(top: 11),
-                decoration: const BoxDecoration(border: Border(top: BorderSide(color: T.border))),
+                decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: T.border)),
+                ),
                 // What the balance actually did. Never hidden, whatever the tier.
                 child: Text(
                   _netLine(o),
                   style: TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
                     color: o.netCents > 0 ? T.greenHi : T.t3,
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),
@@ -247,10 +288,10 @@ class _ResultCardState extends State<_ResultCard> with TickerProviderStateMixin 
 }
 
 String _netLine(Outcome o) => switch (o.kind) {
-      OutcomeKind.win => 'Balance +${formatKes(o.netCents)}',
-      OutcomeKind.refund => 'Your bet back — balance unchanged',
-      OutcomeKind.loss => 'Balance −${formatKes(o.netCents.abs())}',
-    };
+  OutcomeKind.win => 'Balance +${formatKes(o.netCents)}',
+  OutcomeKind.refund => 'Your bet back — balance unchanged',
+  OutcomeKind.loss => 'Balance −${formatKes(o.netCents.abs())}',
+};
 
 class _RaysPainter extends CustomPainter {
   _RaysPainter(this.angle, this.colour);
@@ -284,18 +325,40 @@ class _RaysPainter extends CustomPainter {
 }
 
 class _Particle {
-  _Particle(this.x, this.drift, this.delay, this.speed, this.spin, this.size, this.colour, this.ribbon);
+  _Particle(
+    this.x,
+    this.drift,
+    this.delay,
+    this.speed,
+    this.spin,
+    this.size,
+    this.colour,
+    this.ribbon,
+  );
   final double x, drift, delay, speed, spin, size;
   final Color colour;
   final bool ribbon;
 
   factory _Particle.random(math.Random r, int i, Tier tier) {
     const palettes = {
-      Tier.jackpot: [Color(0xFFFF5EA8), Color(0xFFFFD447), Color(0xFFFF8A3D), Color(0xFF8BE9FD), Color(0xFFFFFFFF)],
-      Tier.huge: [Color(0xFFFFD447), Color(0xFFFFA45C), Color(0xFFFFFFFF), Color(0xFFFFEC99)],
+      Tier.jackpot: [
+        Color(0xFFFF5EA8),
+        Color(0xFFFFD447),
+        Color(0xFFFF8A3D),
+        Color(0xFF8BE9FD),
+        Color(0xFFFFFFFF),
+      ],
+      Tier.huge: [
+        Color(0xFFFFD447),
+        Color(0xFFFFA45C),
+        Color(0xFFFFFFFF),
+        Color(0xFFFFEC99),
+      ],
       Tier.big: [Color(0xFFFF8A3D), Color(0xFFFFD447), Color(0xFFFFFFFF)],
     };
-    final cols = palettes[tier] ?? const [Color(0xFF4FBF5F), Color(0xFFFFFFFF), Color(0xFF9BE7A6)];
+    final cols =
+        palettes[tier] ??
+        const [Color(0xFF4FBF5F), Color(0xFFFFFFFF), Color(0xFF9BE7A6)];
     return _Particle(
       r.nextDouble(),
       (r.nextDouble() - 0.5) * 180,
@@ -321,15 +384,24 @@ class _ConfettiPainter extends CustomPainter {
       if (local <= 0) continue;
       final y = -20 + local * (size.height + 60);
       final x = p.x * size.width + p.drift * local;
-      final paint = Paint()..color = p.colour.withValues(alpha: (1 - local * local).clamp(0.0, 1.0));
+      final paint = Paint()
+        ..color = p.colour.withValues(
+          alpha: (1 - local * local).clamp(0.0, 1.0),
+        );
 
       canvas.save();
       canvas.translate(x, y);
       canvas.rotate(p.spin * local);
       final rect = Rect.fromCenter(
-        center: Offset.zero, width: p.size, height: p.ribbon ? p.size * 2.2 : p.size);
+        center: Offset.zero,
+        width: p.size,
+        height: p.ribbon ? p.size * 2.2 : p.size,
+      );
       if (p.ribbon) {
-        canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(2)), paint);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(rect, const Radius.circular(2)),
+          paint,
+        );
       } else {
         canvas.drawOval(rect, paint);
       }

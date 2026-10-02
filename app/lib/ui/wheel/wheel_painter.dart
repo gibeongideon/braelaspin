@@ -45,24 +45,57 @@ class _Tier {
 _Tier _tierFor(int multBp, int index) {
   if (multBp == 0) {
     return index.isEven
-        ? const _Tier(Color(0xFF3A3037), Color(0xFF241D22), Color(0x80FFFFFF), Color(0x1AFFFFFF))
-        : const _Tier(Color(0xFF2F262C), Color(0xFF1D171B), Color(0x6BFFFFFF), Color(0x12FFFFFF));
+        ? const _Tier(
+            Color(0xFF3A3037),
+            Color(0xFF241D22),
+            Color(0x80FFFFFF),
+            Color(0x1AFFFFFF),
+          )
+        : const _Tier(
+            Color(0xFF2F262C),
+            Color(0xFF1D171B),
+            Color(0x6BFFFFFF),
+            Color(0x12FFFFFF),
+          );
   }
   if (multBp <= 20000) {
-    return const _Tier(Color(0xFF4FBF5F), Color(0xFF2C7838), Color(0xFFFFFFFF), Color(0x4DFFFFFF));
+    return const _Tier(
+      Color(0xFF4FBF5F),
+      Color(0xFF2C7838),
+      Color(0xFFFFFFFF),
+      Color(0x4DFFFFFF),
+    );
   }
   if (multBp <= 100000) {
-    return const _Tier(Color(0xFFFF9648), Color(0xFFD04A0E), Color(0xFFFFFFFF), Color(0x4DFFFFFF));
+    return const _Tier(
+      Color(0xFFFF9648),
+      Color(0xFFD04A0E),
+      Color(0xFFFFFFFF),
+      Color(0x4DFFFFFF),
+    );
   }
   if (multBp <= 500000) {
-    return const _Tier(Color(0xFFFFD447), Color(0xFFC28F06), Color(0xFF3A2A00), Color(0x6BFFFFFF));
+    return const _Tier(
+      Color(0xFFFFD447),
+      Color(0xFFC28F06),
+      Color(0xFF3A2A00),
+      Color(0x6BFFFFFF),
+    );
   }
-  return const _Tier(Color(0xFFFF6FB1), Color(0xFFB81F96), Color(0xFFFFFFFF), Color(0x5CFFFFFF));
+  return const _Tier(
+    Color(0xFFFF6FB1),
+    Color(0xFFB81F96),
+    Color(0xFFFFFFFF),
+    Color(0x5CFFFFFF),
+  );
 }
 
 class WheelPainter extends CustomPainter {
-  WheelPainter({required this.rotationDeg, required this.segments, required this.face})
-      : super(repaint: null);
+  WheelPainter({
+    required this.rotationDeg,
+    required this.segments,
+    required this.face,
+  }) : super(repaint: null);
 
   final double rotationDeg;
   final List<Segment> segments;
@@ -112,20 +145,35 @@ ui.Picture recordFace(List<Segment> segments, double px) {
   final pegRadius = r * 0.905;
 
   // Backing disc, darker than any tile so the gaps read as depth.
-  canvas.drawCircle(Offset.zero, r * 0.95, Paint()..color = const Color(0xFF0A0709));
+  canvas.drawCircle(
+    Offset.zero,
+    r * 0.95,
+    Paint()..color = const Color(0xFF0A0709),
+  );
 
   for (var i = 0; i < segments.length; i++) {
     final seg = segments[i];
     final arc = segmentArcDeg(i + 1, n);
-    final gap = segmentAngle(n) * 0.045; // tight: real wheels have thin dividers
+    final gap =
+        segmentAngle(n) * 0.045; // tight: real wheels have thin dividers
     final start = (arc.startDeg + gap) * _deg;
     final sweep = ((arc.endDeg - gap) - (arc.startDeg + gap)) * _deg;
     final mid = arc.midDeg * _deg;
     final t = _tierFor(seg.multiplierBp, i);
 
     final path = Path()
-      ..arcTo(Rect.fromCircle(center: Offset.zero, radius: tileOuter), start, sweep, true)
-      ..arcTo(Rect.fromCircle(center: Offset.zero, radius: tileInner), start + sweep, -sweep, false)
+      ..arcTo(
+        Rect.fromCircle(center: Offset.zero, radius: tileOuter),
+        start,
+        sweep,
+        true,
+      )
+      ..arcTo(
+        Rect.fromCircle(center: Offset.zero, radius: tileInner),
+        start + sweep,
+        -sweep,
+        false,
+      )
       ..close();
 
     // Radial gradient: lighter at the rim, darker toward the hub, so each tile
@@ -134,8 +182,10 @@ ui.Picture recordFace(List<Segment> segments, double px) {
       path,
       Paint()
         ..shader = ui.Gradient.radial(
-          Offset.zero, tileOuter,
-          [t.b, t.a, t.b], [0.0, 0.82, 1.0],
+          Offset.zero,
+          tileOuter,
+          [t.b, t.a, t.b],
+          [0.0, 0.82, 1.0],
         ),
     );
 
@@ -144,7 +194,9 @@ ui.Picture recordFace(List<Segment> segments, double px) {
     canvas.clipPath(path);
     canvas.drawArc(
       Rect.fromCircle(center: Offset.zero, radius: tileOuter - px * 0.004),
-      start, sweep, false,
+      start,
+      sweep,
+      false,
       Paint()
         ..color = t.rim
         ..style = PaintingStyle.stroke
@@ -162,7 +214,13 @@ ui.Picture recordFace(List<Segment> segments, double px) {
           fontSize: px * (seg.multiplierBp >= 500000 ? 0.049 : 0.055),
           fontWeight: FontWeight.w800,
           shadows: seg.multiplierBp > 0
-              ? [Shadow(color: const Color(0x73000000), blurRadius: px * 0.01, offset: Offset(0, px * 0.002))]
+              ? [
+                  Shadow(
+                    color: const Color(0x73000000),
+                    blurRadius: px * 0.01,
+                    offset: Offset(0, px * 0.002),
+                  ),
+                ]
               : null,
         ),
       ),
@@ -184,16 +242,23 @@ ui.Picture recordFace(List<Segment> segments, double px) {
     final p = Offset(math.cos(a) * pegRadius, math.sin(a) * pegRadius);
     final pr = px * 0.0105;
     canvas.drawCircle(
-      p, pr,
+      p,
+      pr,
       Paint()
         ..shader = ui.Gradient.radial(
-          p.translate(-pr * 0.4, -pr * 0.4), pr,
-          [const Color(0xFFFFFFFF), const Color(0xFFCDD2D8), const Color(0xFF6B7280)],
+          p.translate(-pr * 0.4, -pr * 0.4),
+          pr,
+          [
+            const Color(0xFFFFFFFF),
+            const Color(0xFFCDD2D8),
+            const Color(0xFF6B7280),
+          ],
           [0.0, 0.5, 1.0],
         ),
     );
     canvas.drawCircle(
-      p, pr,
+      p,
+      pr,
       Paint()
         ..color = const Color(0x80000000)
         ..style = PaintingStyle.stroke
@@ -209,13 +274,18 @@ void _paintBezel(Canvas canvas, double px) {
   final w = px * 0.022;
 
   canvas.drawCircle(
-    Offset.zero, r,
+    Offset.zero,
+    r,
     Paint()
       ..shader = ui.Gradient.linear(
-        Offset(-r, -r), Offset(r, r),
+        Offset(-r, -r),
+        Offset(r, r),
         [
-          const Color(0xFF6D6068), const Color(0xFF2B2329), const Color(0xFF151013),
-          const Color(0xFF3A3138), const Color(0xFF0E0A0C),
+          const Color(0xFF6D6068),
+          const Color(0xFF2B2329),
+          const Color(0xFF151013),
+          const Color(0xFF3A3138),
+          const Color(0xFF0E0A0C),
         ],
         [0.0, 0.3, 0.55, 0.8, 1.0],
       )
@@ -225,7 +295,8 @@ void _paintBezel(Canvas canvas, double px) {
 
   // Inner shadow where the tiles meet the bezel — reads as recess.
   canvas.drawCircle(
-    Offset.zero, r - w * 0.6,
+    Offset.zero,
+    r - w * 0.6,
     Paint()
       ..color = const Color(0x8C000000)
       ..style = PaintingStyle.stroke
@@ -237,15 +308,20 @@ void _paintBezel(Canvas canvas, double px) {
 void _paintGloss(Canvas canvas, double px) {
   final r = px / 2 * 0.94;
   canvas.save();
-  canvas.clipPath(Path()..addOval(Rect.fromCircle(center: Offset.zero, radius: r)));
+  canvas.clipPath(
+    Path()..addOval(Rect.fromCircle(center: Offset.zero, radius: r)),
+  );
   canvas.drawRect(
     Rect.fromCircle(center: Offset.zero, radius: r),
     Paint()
       ..shader = ui.Gradient.linear(
-        Offset(-r, -r), Offset(r * 0.45, r * 0.55),
+        Offset(-r, -r),
+        Offset(r * 0.45, r * 0.55),
         [
-          const Color(0x21FFFFFF), const Color(0x09FFFFFF),
-          const Color(0x00FFFFFF), const Color(0x33000000),
+          const Color(0x21FFFFFF),
+          const Color(0x09FFFFFF),
+          const Color(0x00FFFFFF),
+          const Color(0x33000000),
         ],
         [0.0, 0.38, 0.7, 1.0],
       ),
@@ -257,19 +333,30 @@ void _paintGloss(Canvas canvas, double px) {
 void _paintHub(Canvas canvas, double px) {
   final r = px * 0.225;
 
-  canvas.drawCircle(Offset.zero, r * 1.06, Paint()..color = const Color(0xFF0A0709));
+  canvas.drawCircle(
+    Offset.zero,
+    r * 1.06,
+    Paint()..color = const Color(0xFF0A0709),
+  );
 
   canvas.drawCircle(
-    Offset.zero, r,
+    Offset.zero,
+    r,
     Paint()
       ..shader = ui.Gradient.linear(
-        Offset(-r, -r), Offset(r, r),
-        [const Color(0xFF3B323A), const Color(0xFF221B20), const Color(0xFF100C0F)],
+        Offset(-r, -r),
+        Offset(r, r),
+        [
+          const Color(0xFF3B323A),
+          const Color(0xFF221B20),
+          const Color(0xFF100C0F),
+        ],
         [0.0, 0.45, 1.0],
       ),
   );
   canvas.drawCircle(
-    Offset.zero, r,
+    Offset.zero,
+    r,
     Paint()
       ..color = const Color(0x17FFFFFF)
       ..style = PaintingStyle.stroke
@@ -279,23 +366,28 @@ void _paintHub(Canvas canvas, double px) {
   // Brand disc with a warm glow
   final br = r * 0.56;
   canvas.drawCircle(
-    Offset.zero, br * 1.25,
+    Offset.zero,
+    br * 1.25,
     Paint()
       ..color = const Color(0x8CF26B21)
       ..maskFilter = MaskFilter.blur(BlurStyle.normal, px * 0.035),
   );
   canvas.drawCircle(
-    Offset.zero, br,
+    Offset.zero,
+    br,
     Paint()
       ..shader = ui.Gradient.linear(
-        Offset(-br, -br), Offset(br, br),
+        Offset(-br, -br),
+        Offset(br, br),
         [const Color(0xFFFFA45C), T.amber, const Color(0xFFC53F08)],
         [0.0, 0.5, 1.0],
       ),
   );
   canvas.drawArc(
     Rect.fromCircle(center: Offset.zero, radius: br * 0.97),
-    math.pi * 1.08, math.pi * 0.84, false,
+    math.pi * 1.08,
+    math.pi * 0.84,
+    false,
     Paint()
       ..color = const Color(0x66FFFFFF)
       ..style = PaintingStyle.stroke

@@ -44,18 +44,30 @@ class T {
   static const brPill = BorderRadius.all(pill);
 
   // type — a deliberately small scale
-  static const h1 = TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: t1, height: 1.2);
-  static const h2 = TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: t1);
+  static const h1 = TextStyle(
+    fontSize: 21,
+    fontWeight: FontWeight.w800,
+    color: t1,
+    height: 1.2,
+  );
+  static const h2 = TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.w700,
+    color: t1,
+  );
   static const body = TextStyle(fontSize: 15, color: t1, height: 1.4);
   static const sub = TextStyle(fontSize: 13, color: t3, height: 1.4);
   static const hint = TextStyle(fontSize: 12, color: t3);
   static const num0 = TextStyle(
-    fontSize: 27, fontWeight: FontWeight.w800, color: t1,
+    fontSize: 27,
+    fontWeight: FontWeight.w800,
+    color: t1,
     fontFeatures: [FontFeature.tabularFigures()],
   );
 
   static const gradAmber = LinearGradient(
-    begin: Alignment.topLeft, end: Alignment.bottomRight,
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
     colors: [amberHi, amberLo],
   );
 }

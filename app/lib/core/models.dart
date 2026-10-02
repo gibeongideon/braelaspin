@@ -30,27 +30,31 @@ class User {
   final bool isAdmin;
 
   factory User.fromJson(Map<String, dynamic> j) => User(
-        id: j['id'] as int,
-        phone: j['phone'] as String? ?? '',
-        phoneDisplay: j['phone_display'] as String? ?? '',
-        refCode: j['ref_code'] as String? ?? '',
-        refLink: j['ref_link'] as String? ?? '',
-        phoneVerified: j['phone_verified'] as bool? ?? false,
-        isAdmin: j['is_admin'] as bool? ?? false,
-      );
+    id: j['id'] as int,
+    phone: j['phone'] as String? ?? '',
+    phoneDisplay: j['phone_display'] as String? ?? '',
+    refCode: j['ref_code'] as String? ?? '',
+    refLink: j['ref_link'] as String? ?? '',
+    phoneVerified: j['phone_verified'] as bool? ?? false,
+    isAdmin: j['is_admin'] as bool? ?? false,
+  );
 }
 
 class Session {
-  const Session({required this.access, required this.refresh, required this.user});
+  const Session({
+    required this.access,
+    required this.refresh,
+    required this.user,
+  });
   final String access;
   final String refresh;
   final User user;
 
   factory Session.fromJson(Map<String, dynamic> j) => Session(
-        access: j['access'] as String,
-        refresh: j['refresh'] as String,
-        user: User.fromJson(j['user'] as Map<String, dynamic>),
-      );
+    access: j['access'] as String,
+    refresh: j['refresh'] as String,
+    user: User.fromJson(j['user'] as Map<String, dynamic>),
+  );
 }
 
 class Balances {
@@ -67,34 +71,38 @@ class Balances {
   final Cents withdrawableCents;
 
   factory Balances.fromJson(Map<String, dynamic> j) => Balances(
-        realCents: j['real_cents'] as int? ?? 0,
-        demoCents: j['demo_cents'] as int? ?? 0,
-        heldCents: j['held_cents'] as int? ?? 0,
-        withdrawableCents: j['withdrawable_cents'] as int? ?? 0,
-      );
+    realCents: j['real_cents'] as int? ?? 0,
+    demoCents: j['demo_cents'] as int? ?? 0,
+    heldCents: j['held_cents'] as int? ?? 0,
+    withdrawableCents: j['withdrawable_cents'] as int? ?? 0,
+  );
 
   Balances copyWith({Cents? realCents, Cents? demoCents}) => Balances(
-        realCents: realCents ?? this.realCents,
-        demoCents: demoCents ?? this.demoCents,
-        heldCents: heldCents,
-        // Funds held against an open withdrawal have already left realCents.
-        withdrawableCents: realCents ?? this.realCents,
-      );
+    realCents: realCents ?? this.realCents,
+    demoCents: demoCents ?? this.demoCents,
+    heldCents: heldCents,
+    // Funds held against an open withdrawal have already left realCents.
+    withdrawableCents: realCents ?? this.realCents,
+  );
 
   Cents spendable(bool isReal) => isReal ? realCents : demoCents;
 }
 
 class Segment {
-  const Segment({required this.index, required this.multiplierBp, required this.weightBp});
+  const Segment({
+    required this.index,
+    required this.multiplierBp,
+    required this.weightBp,
+  });
   final int index;
   final BasisPoints multiplierBp;
   final int weightBp;
 
   factory Segment.fromJson(Map<String, dynamic> j) => Segment(
-        index: j['index'] as int,
-        multiplierBp: j['multiplier_bp'] as int,
-        weightBp: j['weight_bp'] as int? ?? 0,
-      );
+    index: j['index'] as int,
+    multiplierBp: j['multiplier_bp'] as int,
+    weightBp: j['weight_bp'] as int? ?? 0,
+  );
 }
 
 class GameConfig {
@@ -115,27 +123,31 @@ class GameConfig {
   final BasisPoints maxMultiplierBp;
 
   factory GameConfig.fromJson(Map<String, dynamic> j) => GameConfig(
-        segments: ((j['segments'] as List?) ?? [])
-            .map((s) => Segment.fromJson(s as Map<String, dynamic>))
-            .toList(growable: false),
-        rtpBp: j['rtp_bp'] as int? ?? 9000,
-        minStakeCents: j['min_stake_cents'] as int? ?? 500,
-        maxStakeCents: j['max_stake_cents'] as int? ?? 0,
-        maxMultiplierBp: j['max_multiplier_bp'] as int? ?? 2000000,
-      );
+    segments: ((j['segments'] as List?) ?? [])
+        .map((s) => Segment.fromJson(s as Map<String, dynamic>))
+        .toList(growable: false),
+    rtpBp: j['rtp_bp'] as int? ?? 9000,
+    minStakeCents: j['min_stake_cents'] as int? ?? 500,
+    maxStakeCents: j['max_stake_cents'] as int? ?? 0,
+    maxMultiplierBp: j['max_multiplier_bp'] as int? ?? 2000000,
+  );
 }
 
 class ReferralStats {
-  const ReferralStats({this.count = 0, this.earnedCents = 0, this.last30Cents = 0});
+  const ReferralStats({
+    this.count = 0,
+    this.earnedCents = 0,
+    this.last30Cents = 0,
+  });
   final int count;
   final Cents earnedCents;
   final Cents last30Cents;
 
   factory ReferralStats.fromJson(Map<String, dynamic> j) => ReferralStats(
-        count: j['count'] as int? ?? 0,
-        earnedCents: j['earned_cents'] as int? ?? 0,
-        last30Cents: j['last_30_cents'] as int? ?? 0,
-      );
+    count: j['count'] as int? ?? 0,
+    earnedCents: j['earned_cents'] as int? ?? 0,
+    last30Cents: j['last_30_cents'] as int? ?? 0,
+  );
 }
 
 class Me {
@@ -151,11 +163,11 @@ class Me {
   final ReferralStats referrals;
 
   factory Me.fromJson(Map<String, dynamic> j) => Me(
-        user: User.fromJson(j['user'] as Map<String, dynamic>),
-        balances: Balances.fromJson(j['balances'] as Map<String, dynamic>),
-        game: GameConfig.fromJson(j['game'] as Map<String, dynamic>),
-        referrals: ReferralStats.fromJson(j['referrals'] as Map<String, dynamic>),
-      );
+    user: User.fromJson(j['user'] as Map<String, dynamic>),
+    balances: Balances.fromJson(j['balances'] as Map<String, dynamic>),
+    game: GameConfig.fromJson(j['game'] as Map<String, dynamic>),
+    referrals: ReferralStats.fromJson(j['referrals'] as Map<String, dynamic>),
+  );
 }
 
 class SpinResult {
@@ -182,15 +194,15 @@ class SpinResult {
   final bool isReal;
 
   factory SpinResult.fromJson(Map<String, dynamic> j) => SpinResult(
-        spinId: j['spin_id'] as int? ?? 0,
-        segmentIndex: j['segment_index'] as int,
-        multiplierBp: j['multiplier_bp'] as int,
-        stakeCents: j['stake_cents'] as int,
-        payoutCents: j['payout_cents'] as int,
-        netCents: j['net_cents'] as int? ?? 0,
-        balanceCents: j['balance_cents'] as int,
-        isReal: j['is_real'] as bool? ?? false,
-      );
+    spinId: j['spin_id'] as int? ?? 0,
+    segmentIndex: j['segment_index'] as int,
+    multiplierBp: j['multiplier_bp'] as int,
+    stakeCents: j['stake_cents'] as int,
+    payoutCents: j['payout_cents'] as int,
+    netCents: j['net_cents'] as int? ?? 0,
+    balanceCents: j['balance_cents'] as int,
+    isReal: j['is_real'] as bool? ?? false,
+  );
 }
 
 class Transaction {
@@ -209,12 +221,12 @@ class Transaction {
   final String createdAt;
 
   factory Transaction.fromJson(Map<String, dynamic> j) => Transaction(
-        id: j['id'] as int,
-        kind: j['kind'] as String,
-        isReal: j['is_real'] as bool? ?? false,
-        amountCents: j['amount_cents'] as int,
-        createdAt: j['created_at'] as String? ?? '',
-      );
+    id: j['id'] as int,
+    kind: j['kind'] as String,
+    isReal: j['is_real'] as bool? ?? false,
+    amountCents: j['amount_cents'] as int,
+    createdAt: j['created_at'] as String? ?? '',
+  );
 }
 
 class SpinRow {
@@ -237,12 +249,12 @@ class SpinRow {
   final String createdAt;
 
   factory SpinRow.fromJson(Map<String, dynamic> j) => SpinRow(
-        id: j['id'] as int,
-        isReal: j['is_real'] as bool? ?? false,
-        stakeCents: j['stake_cents'] as int,
-        segmentIndex: j['segment_index'] as int,
-        multiplierBp: j['multiplier_bp'] as int,
-        payoutCents: j['payout_cents'] as int,
-        createdAt: j['created_at'] as String? ?? '',
-      );
+    id: j['id'] as int,
+    isReal: j['is_real'] as bool? ?? false,
+    stakeCents: j['stake_cents'] as int,
+    segmentIndex: j['segment_index'] as int,
+    multiplierBp: j['multiplier_bp'] as int,
+    payoutCents: j['payout_cents'] as int,
+    createdAt: j['created_at'] as String? ?? '',
+  );
 }

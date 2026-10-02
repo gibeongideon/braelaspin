@@ -46,7 +46,8 @@ class Api {
   final void Function()? onAuthLost;
   final Duration timeout;
 
-  final HttpClient _client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
+  final HttpClient _client = HttpClient()
+    ..connectionTimeout = const Duration(seconds: 10);
 
   /// The single in-flight refresh, shared by every caller that needs it.
   Future<bool>? _refreshing;
@@ -54,7 +55,12 @@ class Api {
   Future<T> get<T>(String path, {bool auth = true}) =>
       _send<T>('GET', path, null, auth: auth);
 
-  Future<T> post<T>(String path, [Object? body, bool auth = true, String? idempotencyKey]) =>
+  Future<T> post<T>(
+    String path, [
+    Object? body,
+    bool auth = true,
+    String? idempotencyKey,
+  ]) =>
       _send<T>('POST', path, body, auth: auth, idempotencyKey: idempotencyKey);
 
   Future<T> _send<T>(
@@ -79,7 +85,10 @@ class Api {
         req.headers.set('X-Idempotency-Key', idempotencyKey);
       }
       if (auth && tokens.access != null) {
-        req.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${tokens.access}');
+        req.headers.set(
+          HttpHeaders.authorizationHeader,
+          'Bearer ${tokens.access}',
+        );
       }
       if (body != null) req.write(jsonEncode(body));
 
@@ -104,8 +113,14 @@ class Api {
     // 401 -> refresh once, then replay the original request exactly.
     if (res.statusCode == 401 && auth && !retried) {
       if (await _refreshOnce()) {
-        return _send<T>(method, path, body,
-            auth: auth, idempotencyKey: idempotencyKey, retried: true);
+        return _send<T>(
+          method,
+          path,
+          body,
+          auth: auth,
+          idempotencyKey: idempotencyKey,
+          retried: true,
+        );
       }
       await tokens.clear();
       onAuthLost?.call();
@@ -114,10 +129,13 @@ class Api {
     final err = (payload is Map<String, dynamic>) ? payload['error'] : null;
     throw ApiException(
       kind: _kindFor(res.statusCode),
-      code: err is Map ? (err['code'] as String? ?? 'http_${res.statusCode}')
-                       : 'http_${res.statusCode}',
+      code: err is Map
+          ? (err['code'] as String? ?? 'http_${res.statusCode}')
+          : 'http_${res.statusCode}',
       status: res.statusCode,
-      meta: err is Map ? Map<String, dynamic>.from(err['meta'] as Map? ?? {}) : const {},
+      meta: err is Map
+          ? Map<String, dynamic>.from(err['meta'] as Map? ?? {})
+          : const {},
     );
   }
 
@@ -130,7 +148,9 @@ class Api {
       final rt = tokens.refresh;
       if (rt == null) return false;
       try {
-        final req = await _client.postUrl(Uri.parse('$baseUrl/v1/auth/refresh'));
+        final req = await _client.postUrl(
+          Uri.parse('$baseUrl/v1/auth/refresh'),
+        );
         req.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
         req.write(jsonEncode({'refresh': rt}));
         final res = await req.close().timeout(timeout);
