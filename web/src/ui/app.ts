@@ -6,6 +6,7 @@
  * Flutter shell: an IndexedStack-equivalent of four tabs plus an auth gate.
  */
 
+import { brandMarkSvg } from './brand';
 import { h, mount, clear, Scope } from './dom';
 import { toast } from './toast';
 import type { Store } from '../core/store';
@@ -21,7 +22,7 @@ export type Route = 'spin' | 'wallet' | 'spins' | 'history' | 'refer' | 'profile
 const TABS: { route: Route; label: string; glyph: string; fab?: boolean }[] = [
   { route: 'wallet',  label: 'Wallet',  glyph: '👛' },
   { route: 'spins',   label: 'Results', glyph: '🎯' },
-  { route: 'spin',    label: 'Spin',    glyph: '⚡', fab: true },
+  { route: 'spin',    label: 'Spin',    glyph: '',  fab: true },
   { route: 'history', label: 'History', glyph: '🕘' },
   { route: 'profile', label: 'Profile', glyph: '👤' },
 ];
@@ -49,7 +50,9 @@ export function mountApp(root: HTMLElement, store: Store): void {
         'aria-current': current === t.route ? 'page' : undefined,
         onClick: () => go(t.route),
       },
-        h('span', { class: 'gl', 'aria-hidden': 'true', text: t.glyph }),
+        t.fab
+          ? h('span', { class: 'gl', 'aria-hidden': 'true', html: brandMarkSvg(24) })
+          : h('span', { class: 'gl', 'aria-hidden': 'true', text: t.glyph }),
         h('span', { text: t.label }),
       ),
     ));

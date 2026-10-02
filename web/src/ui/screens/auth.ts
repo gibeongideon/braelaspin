@@ -1,5 +1,6 @@
 /** Sign in / sign up. One screen, two tabs. */
 
+import { brandMarkSvg } from '../brand';
 import { h, mount, Scope } from '../dom';
 import { toast } from '../toast';
 import { normalisePhone, prettyPhone } from '../../core/phone';
@@ -106,7 +107,7 @@ export function AuthScreen(store: Store): { el: HTMLElement; scope: Scope } {
 
   const el = h('div', { class: 'screen auth' },
     h('div', { class: 'logo' },
-      h('div', { class: 'mark', text: '⚡' }),
+      h('div', { class: 'mark', html: brandMarkSvg(42) }),
       h('h1', { class: 'h1', text: 'Braela Spin' }),
       h('p', { class: 'sub', text: 'Spin the wheel. Win up to 200x.' }),
     ),

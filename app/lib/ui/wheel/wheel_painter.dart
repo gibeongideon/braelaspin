@@ -394,12 +394,16 @@ void _paintHub(Canvas canvas, double px) {
       ..strokeWidth = px * 0.004,
   );
 
-  final tp = TextPainter(
-    text: TextSpan(
-      text: '⚡',
-      style: TextStyle(fontSize: br * 1.05, color: const Color(0xFFFFFFFF)),
-    ),
-    textDirection: TextDirection.ltr,
-  )..layout();
-  tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
+  // A cap, not a glyph. The mark is a wheel; putting a wheel's logo inside a
+  // wheel's hub is noise, and a real hub is just a machined plate.
+  canvas.drawCircle(
+    Offset.zero,
+    br * 0.30,
+    Paint()..color = const Color(0x4D000000),
+  );
+  canvas.drawCircle(
+    Offset.zero,
+    br * 0.17,
+    Paint()..color = const Color(0xFFFFE2CC),
+  );
 }

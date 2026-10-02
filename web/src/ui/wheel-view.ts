@@ -387,14 +387,16 @@ export class WheelView {
     ctx.lineWidth = px * 0.004;
     ctx.stroke();
 
-    ctx.fillStyle = '#fff';
-    ctx.font = `700 ${Math.round(br * 1.05)}px system-ui, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(0,0,0,0.35)';
-    ctx.shadowBlur = px * 0.008;
-    ctx.fillText('⚡', 0, br * 0.04);
-    ctx.shadowBlur = 0;
+    // A machined cap, not a glyph. The mark is a wheel; a wheel's logo inside
+    // a wheel's hub is noise.
+    ctx.beginPath();
+    ctx.arc(0, 0, br * 0.30, 0, TAU);
+    ctx.fillStyle = 'rgba(0,0,0,0.30)';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(0, 0, br * 0.17, 0, TAU);
+    ctx.fillStyle = '#ffe2cc';
+    ctx.fill();
   }
 }
 

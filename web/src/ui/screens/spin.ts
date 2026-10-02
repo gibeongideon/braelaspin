@@ -15,6 +15,7 @@
  */
 
 import { h, mount, Scope } from '../dom';
+import { brandMarkSvg } from '../brand';
 import { toast } from '../toast';
 import { WheelView, Ticker } from '../wheel-view';
 import { formatKes, formatBp } from '../../core/money';
@@ -227,7 +228,7 @@ export function SpinScreen(store: Store, nav: (route: string) => void): {
   const el = h('div', { class: 'screen' },
     h('div', { class: 'topbar' },
       h('div', { class: 'brand' },
-        h('span', { class: 'brand-mark', text: '⚡' }),
+        h('span', { class: 'brand-mark', html: brandMarkSvg(20) }),
         'Braela',
       ),
       h('div', { class: 'balance-pill' },

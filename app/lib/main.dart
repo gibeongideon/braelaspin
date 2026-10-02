@@ -18,6 +18,7 @@ import 'core/store.dart';
 import 'ui/screens/auth_screen.dart';
 import 'ui/screens/simple_screens.dart';
 import 'ui/screens/spin_screen.dart';
+import 'ui/brand.dart';
 import 'ui/theme.dart';
 
 /// Where the API lives. Baked at build time:
@@ -169,7 +170,7 @@ class _Boot extends StatelessWidget {
   const _Boot();
   @override
   Widget build(BuildContext context) =>
-      const Center(child: Text('⚡', style: TextStyle(fontSize: 30)));
+      const Center(child: BrandMark(size: 44, onAmber: false));
 }
 
 /// The signed-in shell: five tabs with the spin action raised in the centre,
@@ -246,7 +247,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     const items = [
       ('👛', 'Wallet'),
       ('🎯', 'Results'),
-      ('⚡', 'Spin'),
+      ('', 'Spin'), // the FAB draws the mark itself
       ('🕘', 'History'),
       ('👤', 'Profile'),
     ];
@@ -317,7 +318,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
               BoxShadow(color: T.bg, blurRadius: 0, spreadRadius: 5),
             ],
           ),
-          child: const Text('⚡', style: TextStyle(fontSize: 21)),
+          child: const BrandMark(size: 27),
         ),
       ),
       Transform.translate(

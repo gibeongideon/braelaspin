@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import '../../core/errors.dart';
 import '../../core/phone.dart';
 import '../../core/store.dart';
+import '../brand.dart';
 import '../theme.dart';
 import '../widgets.dart';
 
@@ -134,7 +135,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                     ],
                   ),
-                  child: const Text('⚡', style: TextStyle(fontSize: 30)),
+                  child: const BrandMark(size: 42),
                 ),
                 const SizedBox(height: 13),
                 const Text('Braela Spin', style: T.h1),

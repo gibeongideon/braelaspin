@@ -17,6 +17,7 @@ import '../../core/outcome.dart';
 import '../../core/stakes.dart';
 import '../../core/store.dart';
 import '../result_overlay.dart';
+import '../brand.dart';
 import '../theme.dart';
 import '../ticker.dart';
 import '../widgets.dart';
@@ -147,7 +148,7 @@ class _SpinScreenState extends State<SpinScreen> {
           gradient: T.gradAmber,
           borderRadius: BorderRadius.all(Radius.circular(9)),
         ),
-        child: const Text('⚡', style: TextStyle(fontSize: 15)),
+        child: const BrandMark(size: 21),
       ),
       const SizedBox(width: 9),
       const Text(
