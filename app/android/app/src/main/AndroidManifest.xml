@@ -1,4 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Flutter adds INTERNET to the debug and profile manifests on its own, so
+         `flutter run` always works and its absence here is invisible until a
+         RELEASE build is in someone's hand: every request fails at the socket
+         with no explanation. The whole app is an API client; without this it
+         cannot do anything at all. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Lets the app tell "you are offline" apart from "the server is down",
+         so the error it shows the player is the true one. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <application
         android:label="braelaspin"
         android:name="${applicationName}"

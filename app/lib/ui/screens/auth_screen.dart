@@ -28,6 +28,13 @@ class _AuthScreenState extends State<AuthScreen> {
   String? _phoneHelper;
   String? _phoneError;
 
+  /// The last failure, shown inline under the button.
+  ///
+  /// Toasts live in an Overlay, and an Overlay is easy to lose by accident —
+  /// it happened once already and made every error invisible. The form now
+  /// reports its own failures regardless of what the overlay is doing.
+  String? _formError;
+
   @override
   void dispose() {
     _phone.dispose();
@@ -59,6 +66,7 @@ class _AuthScreenState extends State<AuthScreen> {
   Future<void> _submit() async {
     final p = normalisePhone(_phone.text);
     if (!p.valid) {
+      setState(() => _formError = 'Enter a valid Kenyan mobile number.');
       showToast(context, 'Enter a valid Kenyan mobile number.', kind: 'error');
       return;
     }
@@ -71,7 +79,10 @@ class _AuthScreenState extends State<AuthScreen> {
       return;
     }
 
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _formError = null;
+    });
     try {
       if (_register) {
         await widget.store.register(p.phone, _password.text, _ref.text.trim());
@@ -82,9 +93,18 @@ class _AuthScreenState extends State<AuthScreen> {
         await widget.store.login(p.phone, _password.text);
       }
     } on ApiException catch (e) {
-      if (mounted) showToast(context, e.userMessage, kind: 'error');
-    } catch (_) {
-      if (mounted) showToast(context, 'Something went wrong.', kind: 'error');
+      if (mounted) {
+        setState(() => _formError = e.userMessage);
+        showToast(context, e.userMessage, kind: 'error');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(
+          () =>
+              _formError = 'Could not reach the server. Check your connection.',
+        );
+        showToast(context, 'Something went wrong.', kind: 'error');
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -167,6 +187,14 @@ class _AuthScreenState extends State<AuthScreen> {
             busy: _busy,
             onPressed: _submit,
           ),
+          if (_formError != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              _formError!,
+              style: const TextStyle(fontSize: 13, color: T.red),
+              textAlign: TextAlign.center,
+            ),
+          ],
           const SizedBox(height: 18),
           const Text(
             'New accounts get KES 5,000 in practice credit. 18+. Play responsibly.',

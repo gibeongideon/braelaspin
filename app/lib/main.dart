@@ -121,7 +121,15 @@ class BraelaApp extends StatelessWidget {
     color: T.bg,
     // No Material or Cupertino: the app draws its own five widgets, and
     // skipping both keeps the icon fonts and theme machinery out of the APK.
-    builder: (context, _) => Container(
+    //
+    // `home` is what builds the Navigator, and the Navigator is what provides
+    // the Overlay. An earlier version put the UI straight into `builder` and
+    // DISCARDED the child, which left no Navigator and therefore no Overlay —
+    // so every showToast() and showResult() call found nothing to insert into
+    // and returned silently. Errors were invisible and the win card could
+    // never appear. `builder` must WRAP the child, never replace it.
+    home: _Gate(store: store),
+    builder: (context, child) => Container(
       decoration: const BoxDecoration(
         gradient: RadialGradient(
           center: Alignment(-0.7, -1.1),
@@ -129,7 +137,7 @@ class BraelaApp extends StatelessWidget {
           colors: [Color(0x2BF26B21), T.bg],
         ),
       ),
-      child: _Gate(store: store),
+      child: child,
     ),
     pageRouteBuilder: <T2>(RouteSettings settings, WidgetBuilder builder) =>
         PageRouteBuilder<T2>(
