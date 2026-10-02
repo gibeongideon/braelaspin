@@ -80,3 +80,9 @@ String formatWhen(String iso, {DateTime? now}) {
   final d = '${then.day} ${months[then.month - 1]}';
   return then.year == ref.year ? d : '$d ${then.year}';
 }
+
+/// Basis points as a percentage: 9000 -> "90%".
+String formatBp(BasisPoints bp) {
+  final pct = bp / 100;
+  return '${pct == pct.roundToDouble() ? pct.toInt() : pct.toStringAsFixed(2)}%';
+}

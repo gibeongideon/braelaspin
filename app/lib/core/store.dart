@@ -32,7 +32,7 @@ enum SpinPhase {
 
 class Store {
   Store(this.api, this.tokens, [PrefsStore? prefs])
-      : prefs = prefs ?? MemoryPrefs() {
+    : prefs = prefs ?? MemoryPrefs() {
     // Restore the muted state before the first frame, so a muted device never
     // plays a tick on launch.
     final saved = this.prefs.getBool(kPrefSound);
@@ -62,6 +62,14 @@ class Store {
   /// value — on web the win chime once ignored the Ticker's own flag, so a
   /// "muted" app still played fanfares.
   final soundEnabled = ValueNotifier<bool>(true);
+
+  /// True when the last request failed before reaching the server.
+  ///
+  /// Derived from actual request outcomes rather than from a connectivity
+  /// plugin: `navigator.onLine` and its Android equivalent report whether an
+  /// interface is up, not whether anything is reachable. A phone on captive
+  /// wifi is "online" and cannot place a bet.
+  final offline = ValueNotifier<bool>(false);
   final realMode = ValueNotifier<bool>(false);
   final hideBalance = ValueNotifier<bool>(false);
   final spin = ValueNotifier<SpinPhase>(SpinPhase.idle);
@@ -165,6 +173,9 @@ class Store {
     referrals.value = me.referrals;
   }
 
+  /// Called by the API layer on every outcome, so the banner reflects reality.
+  void noteNetwork({required bool reachable}) => offline.value = !reachable;
+
   Future<void> refreshBalances() async {
     balances.value = Balances.fromJson(
       await api.get<Map<String, dynamic>>('/v1/wallet'),
@@ -211,6 +222,7 @@ class Store {
       spin.value = SpinPhase.spinning;
       return result;
     } on ApiException catch (e) {
+      if (e.kind == ErrorKind.offline) noteNetwork(reachable: false);
       if (e.kind == ErrorKind.timeout) {
         spin.value = SpinPhase.checking;
         final recovered = await _recoverSpin(clientRef);

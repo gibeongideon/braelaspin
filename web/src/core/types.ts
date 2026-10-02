@@ -50,6 +50,12 @@ export interface Segment {
 export interface GameConfig {
   segments: Segment[];
   rtp_bp: BasisPoints;
+  /**
+   * Practice-mode return to player. Higher than `rtp_bp` on purpose, and
+   * shown to the player — a demo with better odds than real play is a
+   * deceptive pattern when it is hidden.
+   */
+  demo_rtp_bp: BasisPoints;
   min_stake_cents: Cents;
   /** Lower of the configured ceiling and what the bankroll can cover. */
   max_stake_cents: Cents;

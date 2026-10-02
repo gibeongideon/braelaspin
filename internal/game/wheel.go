@@ -28,6 +28,50 @@ type Seg struct {
 	Weight int
 }
 
+// DemoWheel is the practice wheel. SAME twelve segments and SAME multipliers
+// as the real wheel — so the thing a player looks at is identical — but
+// reweighted toward the winning tiles.
+//
+// # WHY THIS EXISTS, AND THE OBLIGATION THAT COMES WITH IT
+//
+// Practice mode is more generous on purpose: it should feel rewarding enough
+// that a new player keeps spinning long enough to understand the game. The
+// weights below give RTP 9700 bp against the real wheel's 9000, and a win on
+// 41.49% of spins against 37.23%.
+//
+// That is a DELIBERATE DIVERGENCE BETWEEN PRACTICE AND REAL ODDS, and it is a
+// pattern gambling regulators treat as deceptive when it is hidden — the UK
+// Gambling Commission has acted on exactly this. It is only defensible if the
+// player is TOLD, so GET /v1/game/config reports both numbers and the clients
+// show the practice RTP next to the practice toggle. If that disclosure is
+// ever removed, this table must go back to matching Wheel.
+//
+// The gap is kept deliberately narrow (7 percentage points). Practice should
+// flatter real play, not misrepresent it: a demo at 150% RTP teaches a player
+// that the game pays, which is a lie they then fund with real money.
+var DemoWheel = [12]Seg{
+	{MultBP: 0, Weight: 1463},
+	{MultBP: 10000, Weight: 1150},
+	{MultBP: 20000, Weight: 650},
+	{MultBP: 0, Weight: 1462},
+	{MultBP: 50000, Weight: 420},
+	{MultBP: 10000, Weight: 1150},
+	{MultBP: 0, Weight: 1463},
+	{MultBP: 100000, Weight: 105},
+	{MultBP: 20000, Weight: 650},
+	{MultBP: 0, Weight: 1463},
+	{MultBP: 500000, Weight: 21},
+	{MultBP: 2000000, Weight: 3},
+}
+
+// TableFor returns the wheel a given mode plays on.
+func TableFor(isReal bool) [12]Seg {
+	if isReal {
+		return Wheel
+	}
+	return DemoWheel
+}
+
 // WeightTotal is the denominator every weight is expressed against.
 const WeightTotal = 10000
 
@@ -96,7 +140,7 @@ func RTPBP() int {
 // Validate checks the table against itself and against the configured RTP.
 // It runs at startup so a typo fails the process in the first 50ms rather than
 // quietly changing the house edge in production.
-func Validate(wantRTPBP int) error {
+func Validate(wantRTPBP, demoRTPBP int) error {
 	var weightSum, weighted int64
 	for i, s := range Wheel {
 		if s.Weight <= 0 {
@@ -120,6 +164,24 @@ func Validate(wantRTPBP int) error {
 			"fix the table or the config, do not ship a wheel whose odds disagree with its stated RTP",
 			gotRTP, wantRTPBP)
 	}
+	// The demo table gets the same treatment: weights must sum, its RTP must
+	// match what is configured, and — the rule that matters most — it must be
+	// AT LEAST as generous as the real wheel. A practice mode that quietly
+	// pays worse than real play would be indefensible.
+	if err := validateTable(DemoWheel, demoRTPBP, "DemoWheel"); err != nil {
+		return err
+	}
+	if demoRTPBP < wantRTPBP {
+		return fmt.Errorf(
+			"game: demo RTP %d bp is below the real RTP %d bp; practice must never "+
+				"pay worse than real play", demoRTPBP, wantRTPBP)
+	}
+	if !sameMultipliers(Wheel, DemoWheel) {
+		return fmt.Errorf(
+			"game: DemoWheel's multipliers differ from Wheel's; the two must look " +
+				"identical to a player, only the weights may differ")
+	}
+
 	// The schema constrains segment_index to BETWEEN 1 AND 12. If the table ever
 	// grows or shrinks, every insert would fail the CHECK at run time — on a
 	// player's spin. Catch it at startup instead, where it is a deployment
@@ -131,6 +193,54 @@ func Validate(wantRTPBP int) error {
 			len(Wheel))
 	}
 	return nil
+}
+
+// validateTable checks one wheel: weights sum to WeightTotal, no weight is
+// negative, no multiplier is negative, and the implied RTP is exactly what the
+// caller says it should be.
+func validateTable(table [12]Seg, wantRTPBP int, name string) error {
+	var total, weighted int64
+	for i, s := range table {
+		if s.Weight < 0 {
+			return fmt.Errorf("game: %s segment %d has negative weight %d", name, i+1, s.Weight)
+		}
+		if s.Weight == 0 {
+			return fmt.Errorf("game: %s segment %d has zero weight and can never be drawn", name, i+1)
+		}
+		if s.MultBP < 0 {
+			return fmt.Errorf("game: %s segment %d has negative multiplier %d", name, i+1, s.MultBP)
+		}
+		total += int64(s.Weight)
+		weighted += int64(s.Weight) * int64(s.MultBP)
+	}
+	if total != WeightTotal {
+		return fmt.Errorf("game: %s weights sum to %d, want exactly %d", name, total, WeightTotal)
+	}
+	if got := weighted / WeightTotal; got != int64(wantRTPBP) {
+		return fmt.Errorf(
+			"game: %s yields RTP %d bp but %d bp is configured; fix the table or the "+
+				"config, do not ship a wheel whose odds disagree with its stated RTP",
+			name, got, wantRTPBP)
+	}
+	return nil
+}
+
+func sameMultipliers(a, b [12]Seg) bool {
+	for i := range a {
+		if a[i].MultBP != b[i].MultBP {
+			return false
+		}
+	}
+	return true
+}
+
+// DemoRTPBP is the realised RTP of the practice table.
+func DemoRTPBP() int {
+	var weighted int64
+	for _, s := range DemoWheel {
+		weighted += int64(s.Weight) * int64(s.MultBP)
+	}
+	return int(weighted / WeightTotal)
 }
 
 // Picker draws segments. The zero value uses crypto/rand and is what production
@@ -145,7 +255,14 @@ type Picker struct {
 // 1-indexed because that is the wire format the client animates against: it
 // rotates the wheel so segment `index` lands under a pointer fixed at 12
 // o'clock. The client never computes an outcome; it renders the one we chose.
+// Pick draws from the real wheel.
 func (p Picker) Pick() (index int, multBP int, err error) {
+	return p.PickFrom(Wheel)
+}
+
+// PickFrom draws from an explicit table, so practice and real play share one
+// entropy path and differ only in weights.
+func (p Picker) PickFrom(table [12]Seg) (index int, multBP int, err error) {
 	src := p.Rand
 	if src == nil {
 		src = rand.Reader
@@ -164,7 +281,7 @@ func (p Picker) Pick() (index int, multBP int, err error) {
 	// rediscover it; rejection sampling would be correct and is not worth it.
 	r := int(binary.BigEndian.Uint32(b[:]) % WeightTotal)
 
-	for i, s := range Wheel {
+	for i, s := range table {
 		if r < s.Weight {
 			return i + 1, s.MultBP, nil
 		}

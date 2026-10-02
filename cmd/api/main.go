@@ -107,7 +107,7 @@ func serve(ctx context.Context, cfg *config.Config, log *slog.Logger) error {
 	// disagree with the configured RTP must never reach a player, so this
 	// fails the process in the first milliseconds rather than quietly
 	// changing the house edge.
-	if err := game.Validate(cfg.RTPBP); err != nil {
+	if err := game.Validate(cfg.RTPBP, cfg.DemoRTPBP); err != nil {
 		return err
 	}
 	// A misplaced zero in MAX_STAKE_CENTS would overflow the exposure
@@ -117,7 +117,8 @@ func serve(ctx context.Context, cfg *config.Config, log *slog.Logger) error {
 		return err
 	}
 	log.Info("wheel validated",
-		"segments", len(game.Wheel), "rtp_bp", game.RTPBP(), "max_multiplier_bp", game.MaxMultBP())
+		"segments", len(game.Wheel), "rtp_bp", game.RTPBP(),
+		"demo_rtp_bp", game.DemoRTPBP(), "max_multiplier_bp", game.MaxMultBP())
 
 	pool, err := db.Open(ctx, cfg.DatabaseURL, cfg.DBMaxConns, cfg.DBMinConns)
 	if err != nil {

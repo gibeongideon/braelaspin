@@ -218,7 +218,32 @@ class _SpinScreenState extends State<SpinScreen> {
           ),
         ),
       ),
+      const SizedBox(width: 8),
+      _muteButton(),
     ],
+  );
+
+  /// Mute toggle, in the top bar where the sound is.
+  Widget _muteButton() => ValueListenableBuilder<bool>(
+    valueListenable: store.soundEnabled,
+    builder: (_, on, __) => GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        store.toggleSound();
+      },
+      child: Container(
+        width: 34,
+        height: 34,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: T.surface,
+          border: Border.all(color: T.border),
+          borderRadius: const BorderRadius.all(Radius.circular(17)),
+        ),
+        child: Text(on ? '🔊' : '🔇', style: const TextStyle(fontSize: 15)),
+      ),
+    ),
   );
 
   Widget _wheelStack() => ValueListenableBuilder<GameConfig>(
@@ -314,10 +339,12 @@ class _SpinScreenState extends State<SpinScreen> {
     try {
       final j = await store.api.get<Map<String, dynamic>>('/v1/game/winners');
       final items = ((j['items'] as List?) ?? [])
-          .map((w) => (
-                (w as Map<String, dynamic>)['name'] as String? ?? '',
-                w['payout_cents'] as int? ?? 0,
-              ))
+          .map(
+            (w) => (
+              (w as Map<String, dynamic>)['name'] as String? ?? '',
+              w['payout_cents'] as int? ?? 0,
+            ),
+          )
           .toList();
       if (mounted) setState(() => _winners = items);
     } catch (_) {
@@ -558,8 +585,13 @@ class _SpinScreenState extends State<SpinScreen> {
       builder: (_, __, ___) {
         final ceiling = store.maxStake();
         final min = store.config.value.minStakeCents;
+        // Practice pays better than real play. Say so, every time practice is
+        // selected — an undisclosed difference between demo and real odds is
+        // a deceptive pattern, and the disclosure is what makes it legitimate.
+        final cfg = store.config.value;
         final text = !real
-            ? ''
+            ? 'Practice pays ${formatBp(cfg.demoRtpBp)} vs '
+                  '${formatBp(cfg.rtpBp)} on real money'
             : ceiling < min
             ? 'Real-money play is unavailable right now.'
             : 'Max bet ${formatKes(ceiling)}';

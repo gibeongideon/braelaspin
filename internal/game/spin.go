@@ -164,7 +164,8 @@ func (s *Service) Spin(ctx context.Context, req Request) (*Result, error) {
 	}
 
 	// ── the draw ──────────────────────────────────────────────────────────
-	segIdx, multBP, err := s.pick.Pick()
+	// Practice draws from the more generous table; see game.DemoWheel.
+	segIdx, multBP, err := s.pick.PickFrom(TableFor(req.IsReal))
 	if err != nil {
 		return nil, fmt.Errorf("spin: %w", err)
 	}
@@ -286,11 +287,18 @@ func (s *Service) FindByClientRef(ctx context.Context, userID int64, clientRef s
 
 // Config is GET /v1/game/config.
 type Config struct {
-	Segments      []Segment `json:"segments"`
-	RTPBP         int       `json:"rtp_bp"`
-	MinStakeCents int64     `json:"min_stake_cents"`
-	MaxStakeCents int64     `json:"max_stake_cents"`
-	MaxMultiplier int       `json:"max_multiplier_bp"`
+	Segments []Segment `json:"segments"`
+	RTPBP    int       `json:"rtp_bp"`
+
+	// DemoRTPBP is the practice table's return to player, reported ALONGSIDE
+	// RTPBP so the clients can tell the player that practice pays better than
+	// real play. Shipping that divergence without disclosing it is what turns
+	// a generous demo into a deceptive one; see game.DemoWheel.
+	DemoRTPBP int `json:"demo_rtp_bp"`
+
+	MinStakeCents int64 `json:"min_stake_cents"`
+	MaxStakeCents int64 `json:"max_stake_cents"`
+	MaxMultiplier int   `json:"max_multiplier_bp"`
 }
 
 // Config reports the wheel and the currently admissible stake range.
@@ -310,6 +318,7 @@ func (s *Service) Config(ctx context.Context) (*Config, error) {
 	return &Config{
 		Segments:      Segments(),
 		RTPBP:         s.econ.RTPBP,
+		DemoRTPBP:     DemoRTPBP(),
 		MinStakeCents: s.econ.MinStakeCents,
 		MaxStakeCents: maxStake,
 		MaxMultiplier: MaxMultBP(),

@@ -446,18 +446,20 @@ class InviteScreen extends StatelessWidget {
                     style: const TextStyle(fontSize: 13, color: T.t1),
                   ),
                 ),
-                  const SizedBox(height: 14),
-                  if (user != null) _ShareGrid(refLink: user.refLink),
-                  const SizedBox(height: 12),
-                  w.AppButton(
-                    label: '↗ More sharing options',
-                    compact: true,
-                    onPressed: user == null
-                        ? null
-                        : () => _channel.invokeMethod<bool>('sheet', {
+                const SizedBox(height: 14),
+                if (user != null) _ShareGrid(refLink: user.refLink),
+                const SizedBox(height: 12),
+                w.AppButton(
+                  label: '↗ More sharing options',
+                  compact: true,
+                  onPressed: user == null
+                      ? null
+                      : () => _channel
+                            .invokeMethod<bool>('sheet', {
                               'text': inviteText(user.refLink),
-                            }).catchError((_) => false),
-                  ),
+                            })
+                            .catchError((_) => false),
+                ),
                 const SizedBox(height: 10),
                 Text(
                   'Code: ${user?.refCode ?? '—'} · You earn 2% of every bet your friends place.',
@@ -538,7 +540,11 @@ class _ShareGrid extends StatelessWidget {
                 .catchError((_) => false);
             // Saying nothing when the app is missing looks like a dead button.
             if (ok != true && context.mounted) {
-              w.showToast(context, '${c.label} is not installed.', kind: 'warn');
+              w.showToast(
+                context,
+                '${c.label} is not installed.',
+                kind: 'warn',
+              );
             }
           },
           child: Container(

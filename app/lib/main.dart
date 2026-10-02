@@ -231,6 +231,12 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     return Stack(
       children: [
         Positioned.fill(child: body),
+        Positioned(
+          left: 0,
+          right: 0,
+          top: 0,
+          child: _OfflineBanner(store: store),
+        ),
         Positioned(left: 0, right: 0, bottom: 0, child: _nav()),
       ],
     );
@@ -325,6 +331,37 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
         ),
       ),
     ],
+  );
+}
+
+/// Shown when the last request failed before reaching the server.
+class _OfflineBanner extends StatelessWidget {
+  const _OfflineBanner({required this.store});
+  final Store store;
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<bool>(
+    valueListenable: store.offline,
+    builder: (_, off, __) => off
+        ? Container(
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 8,
+              bottom: 9,
+              left: 16,
+              right: 16,
+            ),
+            color: const Color(0xFF4A2B12),
+            alignment: Alignment.center,
+            child: const Text(
+              'No connection — your bets are not being sent.',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: T.gold,
+              ),
+            ),
+          )
+        : const SizedBox.shrink(),
   );
 }
 

@@ -109,6 +109,7 @@ class GameConfig {
   const GameConfig({
     this.segments = const [],
     this.rtpBp = 9000,
+    this.demoRtpBp = 9700,
     this.minStakeCents = 500,
     this.maxStakeCents = 0,
     this.maxMultiplierBp = 2000000,
@@ -116,6 +117,11 @@ class GameConfig {
 
   final List<Segment> segments;
   final BasisPoints rtpBp;
+
+  /// Practice-mode return to player. Higher than [rtpBp] on purpose, and shown
+  /// to the player — a demo with better odds than real play is a deceptive
+  /// pattern when it is hidden.
+  final BasisPoints demoRtpBp;
   final Cents minStakeCents;
 
   /// Lower of the configured ceiling and what the bankroll can cover.

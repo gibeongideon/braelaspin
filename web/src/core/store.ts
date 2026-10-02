@@ -36,7 +36,7 @@ const ZERO_BALANCES: Balances = {
 };
 
 const FALLBACK_CONFIG: GameConfig = {
-  segments: [], rtp_bp: 9000, min_stake_cents: 500,
+  segments: [], rtp_bp: 9000, demo_rtp_bp: 9700, min_stake_cents: 500,
   max_stake_cents: 0, max_multiplier_bp: 2_000_000,
 };
 

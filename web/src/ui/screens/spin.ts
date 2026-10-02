@@ -17,7 +17,7 @@
 import { h, mount, Scope } from '../dom';
 import { toast } from '../toast';
 import { WheelView, Ticker } from '../wheel-view';
-import { formatKes } from '../../core/money';
+import { formatKes, formatBp } from '../../core/money';
 import { STAKE_LADDER, stepUp, stepDown, defaultStake } from '../../core/stakes';
 import { describeOutcome, PayoutMismatchError } from '../../core/outcome';
 import { showResult } from '../result-overlay';
@@ -143,8 +143,12 @@ export function SpinScreen(store: Store, nav: (route: string) => void): {
 
     // Only say something when it is not obvious. In practice mode the ceiling
     // is the player's own free balance and needs no commentary.
+    // Practice pays better than real play. Say so, every time practice is
+    // selected — an undisclosed difference between demo and real odds is a
+    // deceptive pattern, and the disclosure is what makes it legitimate.
+    const cfgNow = store.config.value;
     limitHint.textContent = !store.realMode.value
-      ? ''
+      ? `Practice pays ${formatBp(cfgNow.demo_rtp_bp)} vs ${formatBp(cfgNow.rtp_bp)} on real money`
       : ceiling < min
         ? 'Real-money play is unavailable right now.'
         : `Max bet ${formatKes(ceiling)}`;

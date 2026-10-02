@@ -27,8 +27,8 @@ func TestWheelRTPIsExactly9000BP(t *testing.T) {
 }
 
 func TestValidateAcceptsTheShippedTable(t *testing.T) {
-	if err := Validate(9000); err != nil {
-		t.Fatalf("Validate(9000) on the shipped table: %v", err)
+	if err := Validate(9000, 9700); err != nil {
+		t.Fatalf("Validate(9000, 9700) on the shipped table: %v", err)
 	}
 }
 
@@ -36,8 +36,8 @@ func TestValidateRejectsMismatchedRTP(t *testing.T) {
 	// The point of Validate: a table whose odds disagree with the stated RTP
 	// must not start. This is the guard against silently changing the house
 	// edge by editing one weight.
-	if err := Validate(8500); err == nil {
-		t.Fatal("Validate(8500) accepted a table that yields 9000bp; it must refuse")
+	if err := Validate(8500, 9700); err == nil {
+		t.Fatal("Validate(8500, 9700) accepted a table that yields 9000bp; it must refuse")
 	}
 }
 
@@ -58,7 +58,7 @@ func TestValidateRejectsBadTables(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			Wheel = orig
 			tc.mutate()
-			if err := Validate(9000); err == nil {
+			if err := Validate(9000, 9700); err == nil {
 				t.Errorf("Validate accepted a table with %s", tc.name)
 			}
 		})
@@ -238,4 +238,118 @@ func TestHouseEdgeCoversRakeAndReferral(t *testing.T) {
 	}
 	t.Logf("edge %d bp = rake %d + referral %d + bankroll growth %d",
 		edge, rakeBP, referralBP, edge-rakeBP-referralBP)
+}
+
+// ── the practice table ──────────────────────────────────────────────────────
+//
+// Practice is deliberately more generous than real play. That is a divergence
+// regulators treat as deceptive when hidden, so these tests pin the three
+// properties that keep it defensible: the two wheels LOOK identical, practice
+// never pays worse, and the gap stays narrow enough to flatter real play
+// rather than misrepresent it.
+
+func TestDemoWheelLooksIdenticalToTheRealOne(t *testing.T) {
+	// A player must not be able to see that they are on a different table.
+	if len(DemoWheel) != len(Wheel) {
+		t.Fatalf("DemoWheel has %d segments, Wheel has %d", len(DemoWheel), len(Wheel))
+	}
+	for i := range Wheel {
+		if DemoWheel[i].MultBP != Wheel[i].MultBP {
+			t.Errorf("segment %d: demo multiplier %d != real %d — the wheels would look different",
+				i+1, DemoWheel[i].MultBP, Wheel[i].MultBP)
+		}
+	}
+}
+
+func TestDemoWheelWeightsAreValid(t *testing.T) {
+	var total int64
+	for i, s := range DemoWheel {
+		if s.Weight <= 0 {
+			t.Errorf("demo segment %d has weight %d; it could never be drawn", i+1, s.Weight)
+		}
+		total += int64(s.Weight)
+	}
+	if total != WeightTotal {
+		t.Errorf("demo weights sum to %d, want %d", total, WeightTotal)
+	}
+}
+
+func TestDemoIsMoreGenerousThanRealButNotAbsurdly(t *testing.T) {
+	real, demo := RTPBP(), DemoRTPBP()
+	t.Logf("real RTP %d bp, practice RTP %d bp", real, demo)
+
+	if demo <= real {
+		t.Errorf("practice RTP %d is not above real %d — the whole point is that practice pays better",
+			demo, real)
+	}
+	// A demo at 150% teaches a player that the game pays, which is a lie they
+	// then fund with real money. Keep the flattery within 10 points.
+	if demo-real > 1000 {
+		t.Errorf("practice RTP %d exceeds real %d by %d bp; that misrepresents real play",
+			demo, real, demo-real)
+	}
+	if demo > 10000 {
+		t.Errorf("practice RTP %d bp is above 100%%: practice would pay out forever", demo)
+	}
+}
+
+func TestDemoWinsMoreOftenThanReal(t *testing.T) {
+	winRate := func(w [12]Seg) float64 {
+		var wins int64
+		for _, s := range w {
+			if s.MultBP > 0 {
+				wins += int64(s.Weight)
+			}
+		}
+		return float64(wins) / float64(WeightTotal) * 100
+	}
+	r, d := winRate(Wheel), winRate(DemoWheel)
+	t.Logf("win rate: real %.2f%%, practice %.2f%%", r, d)
+	if d <= r {
+		t.Errorf("practice wins on %.2f%% of spins, real on %.2f%% — practice should win more often", d, r)
+	}
+}
+
+func TestValidateRejectsADemoTableThatPaysWorseThanReal(t *testing.T) {
+	// The config guard, exercised through Validate.
+	if err := Validate(9000, 8000); err == nil {
+		t.Fatal("Validate accepted a practice RTP below the real RTP")
+	}
+}
+
+func TestTableForPicksTheRightWheel(t *testing.T) {
+	if TableFor(true) != Wheel {
+		t.Error("real play must draw from Wheel")
+	}
+	if TableFor(false) != DemoWheel {
+		t.Error("practice must draw from DemoWheel")
+	}
+}
+
+// The practice table must actually realise its stated RTP over many draws,
+// the same standard the real wheel is held to.
+func TestDemoWheelRealisesItsStatedRTP(t *testing.T) {
+	if testing.Short() {
+		t.Skip("statistical")
+	}
+	const draws = 2_000_000
+	const stake = int64(10_000)
+
+	p := Picker{}
+	var staked, paid int64
+	for i := 0; i < draws; i++ {
+		_, multBP, err := p.PickFrom(DemoWheel)
+		if err != nil {
+			t.Fatal(err)
+		}
+		staked += stake
+		paid += Payout(stake, multBP)
+	}
+	realised := float64(paid) / float64(staked) * 10000
+	t.Logf("%d practice draws: realised RTP %.0f bp (configured %d)", draws, realised, DemoRTPBP())
+
+	// 4 sigma, same tolerance as the real-wheel test.
+	if diff := realised - float64(DemoRTPBP()); diff < -400 || diff > 400 {
+		t.Errorf("realised practice RTP %.0f bp strays from %d bp", realised, DemoRTPBP())
+	}
 }

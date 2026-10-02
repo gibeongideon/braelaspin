@@ -47,6 +47,7 @@ type Config struct {
 
 	// game economics (basis points; 10000 = 100%)
 	RTPBP           int
+	DemoRTPBP       int
 	RakeBP          int
 	ReferralBP      int
 	MinStakeCents   int64
@@ -276,6 +277,9 @@ func Load() (*Config, error) {
 
 	// ── game economics ─────────────────────────────────────────────────────
 	c.RTPBP = l.bp("RTP_BP", 9000)
+	// Practice pays better than real play on purpose; see game.DemoWheel for
+	// the disclosure obligation that comes with it.
+	c.DemoRTPBP = l.bp("DEMO_RTP_BP", 9700)
 	c.RakeBP = l.bp("RAKE_BP", 500)
 	c.ReferralBP = l.bp("REFERRAL_BP", 200)
 	c.MinStakeCents = l.i64("MIN_STAKE_CENTS", 500)
@@ -342,6 +346,12 @@ func Load() (*Config, error) {
 	}
 	// The edge must cover what we pay out of it. RTP 9000 leaves 1000bp of edge;
 	// rake + referral must fit inside that or the house loses money on every spin.
+	// Practice must never pay worse than real play.
+	if c.DemoRTPBP < c.RTPBP {
+		l.bad("DEMO_RTP_BP", fmt.Sprintf(
+			"is %d bp, below RTP_BP=%d; practice must never pay worse than real play",
+			c.DemoRTPBP, c.RTPBP))
+	}
 	if edge := 10000 - c.RTPBP; c.RakeBP+c.ReferralBP > edge {
 		l.bad("RAKE_BP+REFERRAL_BP", fmt.Sprintf(
 			"total %dbp exceeds the %dbp house edge implied by RTP_BP=%d",
